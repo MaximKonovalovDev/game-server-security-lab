@@ -308,6 +308,18 @@ Full spec: `docs/SECURED-SERVER.md` — the one doc that fuses everything into O
 
 ---
 
+## PART L — SECURITYPACK-PLUGIN: BUILDING THE PACK INTO THE FLAXMCP REPO (deep spec 2026-08-01)
+
+Full spec: `docs/SECURITYPACK-PLUGIN.md` — grounded in a 3-pass repo audit of `C:\flax\flax-mcp`. Verdict: 80% ready. Two layers (MCP boot is `#if FLAX_EDITOR`; shipped builds have no MCP): **Runtime = game-side source** (`Source/Game/Shared/Security/`: PacketGuard NET-1/2/5, Envelope250 HMAC, Tripwires 251-255, MovementGuard, MetricsGuard, DossierWriter, FlagRouter, SentinelT1 ONNX, LobbyScaffold subclass) and **Ops = plugins/security/ DLL** (`[MegaTool("manage_security")]`: status/flag_list/flag_detail/dossier Safe, flag_review Mutating, wave_create Destructive+dry-run; LiveBridge reflection to Runtime; fleet mode = signed wave-order file drops, never a tunneled endpoint).
+
+- **Repo already gives us:** real UDP TransportManager + AntiCheatEngine (`network/anticheat_speed_register` — extend), `LobbyScaffold.ResolveAuthenticatedPlayerId:256` override point (no subclass exists → all connections rejected today), chat hardening done, ID space 129+ reserved for add-ons (envelope 250, tripwires 251-255), MCP token auth ALREADY DONE (TokenValidator fail-closed), OriginValidator, QueryRouterProvider ONNX pattern + receipts/promotion ops loop (v2g receipt), LlmIntentSieve regex precedent, Serilog NDJSON rolling logs, Policy gate with intent/dry-run.
+- **Gaps with exact spots:** receive event loop unwired (PacketRegistry.Receive dead code — `LobbyScaffold.ProcessRawPeerEvent:400` never called; TODO(network-verify)); NET-1 unbounded counts (NetworkPackets.cs:135-144, 212-222; combat _incoming:447); NET-2 no codec string caps; NET-3 zero movement validation (no PlayersTransform consumer); NET-5 enum checks missing (NetworkCombatSync.cs:461); id-6 silent-swallow blind spot (:72-74); no disconnect reasons; ENet tunables not reachable from managed code (engine defaults, ops-layer).
+- **Registration checklist:** BootOrchestrator.PluginManifestDirs (~:140) += security; DeployManifest.Buckets row; manifest assemblies; wiring_self_test ExpectedExtensions resync; packages.lock.json + TreatWarningsAsErrors + FlaxMcp.Analyzers.
+- **Sentinel T1:** copy QueryRouter pattern (env var FLAXMCP_SECURITYPACK_MODEL_PATH, status tokens, graceful degrade, float32 only, receipts + MANIFEST + runbook, RoutingTelemetry-style reportOnly telemetry).
+- **Build order S0-S3** (event loop + guards → envelope/movement → sentinel+ops tools → intel), honest risks: event-loop engine verification, key ceremony drill, destructive stays destructive.
+
+---
+
 ## Immediate next actions (in order)
 1. `[use]` Wire the server + fix NET-1/NET-2/NET-4 (game code).
 2. `[use]` Write the Wireshark Lua dissector for PacketIds 1-8 + combat 200 (keeps in `tools/`).
