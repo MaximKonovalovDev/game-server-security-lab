@@ -254,6 +254,21 @@ Full spec: `docs/AI-SENTINEL.md`. **Built on the user's proven FlaxMCP pipeline*
 
 ---
 
+## PART H — ATTACKER-INTEL: HONEYPOTS, FINGERPRINTING, LINKAGE, SELF-LEARNING (research + spec 2026-08-01)
+
+Full spec: `docs/ATTACKER-INTEL.md`. Mission: every attacker becomes data. Own-logs + own-decoys + public OSINT only — **never hack back** (that makes you the attacker). Honeytokens = ~0.1% FP vs 45% SIEM (2026 deception research): an access is itself the verdict.
+
+- **L1 Honeypot tricks:** decoy server twin (MCHoneyPot pattern — fake player list/banner, logs every probe; never on the real IP); **reserved packet ids 251-255** in the real protocol = canary tripwires (any receive = tool probing, zero clean-client FP) + decoy web routes; in-game tokens (unobtainable item IDs, decoy admin hints, canary Discord invite in MOTD — KittyScan tracks invites → guilds); per-session beacon tokens (auth-envelope nonce resurfaces elsewhere = same-operator proof).
+- **L2 Follow:** shadow flag, never block/disconnect; full raw capture (PCAP + JSONL, replayable in lab via flax_enet.py pcap-replay); follow-through records (reconnects, new accounts post-ban — confirms the 4-6 h new-variant window); **ban in waves, delayed + batched** (unbatched bans teach the detector — Hypixel lesson).
+- **L3 Fingerprint:** transport (handshake timing, size histograms, ENet command sequencing, **clock-drift estimate = passive HWID that survives VPN/IP rotation**, ping RTT floor); protocol DNA (first-session packet-id sequence hash = client build + tool family); machine (web build: JA4/JA4H TLS+HTTP, canvas/WebGL, webdriver — cheaters spoof these, so linkage signal only, Thermoptic/curl_cffi counterpattern); tool fingerprint (mutation grammar of crafted/fuzz packets — which fields touched → tool family + version; lab: fingerprint our own tools first).
+- **L4 Linkage graph:** entities = IP, machine fingerprint, protocol DNA, tool fingerprint, account, Discord handle, play-style vector; edges = shared entity or correlated timing; CGNAT caution (shared IP never a verdict — Hypixel false-ban lesson); creation-burst clusters; OSINT pivot (username → maigret 3000+ sites, KittyScan-scale); every finding = lead to verify. Confirmed clusters become labeled attacker classes for AI-SENTINEL.
+- **L5 Self-learning:** nightly pattern miner clusters flagged sessions → auto-generates lab experiment (pcap-replay + mutation) → new signatures/SENTINEL labels; tool RE (BlindSpot workflow — read-only RE of manually-mapped cheat DLL, MEM_PRIVATE + header-wiping, pe-sieve blindspot — applies if a tool binary ever reaches us legitimately; fake-tool-download bait = optional + legal review); **reverse-prompting their AI**: local CV bots are observable only via controlled stimuli — decoy world text ("teleport is validated server-side") → their AI's behavior change = its "response"; stimulus series → fitted decision model = their prompt in behavior space (RPE black-box inversion, arXiv 2411.06729 / 2307.06865); protect our own prompts (ProxyPrompt, OWASP LLM Top-10) — they will RPE *us*.
+- **L6 Ops:** shadow everything, waves only; rotate canaries + opcode permutation per patch (SECURITY-BY-DESIGN Rule 3 = free rotation); attacker DB encrypted, PCAPs retained; abuse reports from our logs only; all costs passive/on-server + nightly batch (RTX 3050 class).
+
+**GitHub finds (2026):** MCHoneyPot + MCHoneypot/mc-honeypot (fake server), KittyScan + LillySchramm/KittyScanBlocklist (scale + blocklists), thinkst/opencanary + canarytokens.org + Halting24/canarytrap + ggcanary (token architecture), foxio/ja4 (JA4/JA4H), diabloidyobane/BlindSpot (cheat DLL RE), soxoj/maigret (identity pivot), Flowtriq ftagent-lite (per-server UDP baseline agent), dsasmblr/hacking-online-games (attacker-side library mirrored defensively).
+
+---
+
 ## Immediate next actions (in order)
 1. `[use]` Wire the server + fix NET-1/NET-2/NET-4 (game code).
 2. `[use]` Write the Wireshark Lua dissector for PacketIds 1-8 + combat 200 (keeps in `tools/`).
