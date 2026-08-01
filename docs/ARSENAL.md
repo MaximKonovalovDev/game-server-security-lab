@@ -197,6 +197,12 @@ Browser games are 100% exposed — devtools reads your JS/protocol instantly; ha
 - 2026 defense trend: **server-side AI anomaly detection** — YAACS (arXiv Jul 2026: 88.6% acc / 0.97% FPR), FairFight/VACNet-style telemetry.
 - **Defense map:** NET-3 movement validation, NET-1/2 caps, NET-4 rate limits (AI protocol exploits) · packet-timing telemetry (AI bots) · never trust the client (memory hacks) · HMAC ticket auth (web JS exposure) · duplicatePeers=2 + ConnectionsLimit + handshake limits (AI floods) · 2FA + revocable tickets (credentials).
 
+### E5. Reddit firsthand round (2026-08-01) — the 4 lessons
+1. **Dupe/exploit death has a rollback window** — New World whack-a-mole + trading shutdowns; WoW ban waves + server rollback; generic AAA dupe: "spread like wildfire, economy wrecked... missed their rollback window." Detect fast server-side or you can never roll back.
+2. **Cheaters normalize cheating** — Hypixel Aug 2025: "Everyone is cheating, so I have to cheat"; players stop reporting when nothing happens; Hypixel FAQ admits: "cheater-free is impossible." Behavioral AC (Watchdog) + constant updates is attrition, not victory.
+3. **Server validation can't stop CV/humanized bots** — behavior telemetry + server authority is the only unbypassable layer.
+4. **Hackers sabotage servers themselves** — Battlefield V "cheaters draining servers"; GTA V teleport/crash; Red Dead Online: modders cited as why Rockstar abandoned updates.
+
 ---
 
 ## Immediate next actions (in order)

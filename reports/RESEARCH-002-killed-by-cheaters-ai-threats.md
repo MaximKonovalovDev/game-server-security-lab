@@ -61,6 +61,27 @@ Research compiled 2026-08-01. Two rounds of web research (general + Reddit round
 - AI fuzzing/DoS on tunnel → Portwarp + firewall, duplicatePeers=2, ConnectionsLimit, handshake rate limits
 - Credential attacks → 2FA + revocable HMAC tickets
 
+## 5. Reddit round (2026-08-01) — firsthand stories
+
+### Economy-killer cases (r/gamedev "What's the Worst Economy Hacks")
+- **New World (Amazon):** massive item-dupe outbreak — devs "playing whack-a-mole with the dupes, shutting down trading/AH between players. Caused massive trust issues in the player base and lots of people quit" (r/gamedev, 2023).
+- **World of Warcraft:** banned tens of thousands for an item-duplication glitch and had to **roll server state back** (r/gamedev OP).
+- **Generic AAA MMORPG dupe:** "spread like wildfire and the economy got totally wrecked... I stopped playing shortly after, together with most of the playerbase. They were too slow finding a way to reliably identify offenders and missed their rollback window." → **the dupe-then-rollback timing lesson.**
+
+### The arms-race cases
+- **Hypixel (Minecraft, 100k+ concurrent):** Watchdog behavioral anti-cheat vs hacked clients. Aug 2025 wave thread: cheaters brag openly ("Everyone is cheating, so I have to cheat"), players stopped reporting because "nothing will happen." Hypixel's own FAQ: *"Will Hypixel ever be cheater-free? No, it is impossible."* → **behavioral AC + constant updates is the only winning posture, and even it is a war of attrition.**
+- **Red Dead Online:** r/RedDeadOnline "Hackers/modders have ruined my favorite game" — PC modders/hackers cited as a major reason Rockstar abandoned RDO content updates.
+- **Rust:** r/gaming "CHEATERS RUINING RUST, RAIDED / DESTROYED BY HACKERS."
+- **GTA V Online:** hackers teleport/kick/crash players' games (Steam discussions).
+- **Battlefield V (EA forums):** "Cheaters sabotaging PC servers, draining player counts then switching servers."
+- **Mini Militia (mobile):** "Hackers destroyed this game" (viral May 2026).
+
+### Reddit lessons for the lab
+1. **Dupe/exploit → economy death has a rollback window** — detect fast (server-side anomaly telemetry) or you can never roll back without revolt.
+2. **Cheaters normalize cheating** ("everyone does it") — enforcement speed matters; slow bans (Hypixel 20–30 min waves) breed "nothing happens" resignation.
+3. **Even perfect server validation doesn't stop CV/humanized bots** — behavior telemetry + server authority is the only layer that can't be bypassed.
+4. **Hackers sabotage servers themselves** (BFV server-draining, GTA crashing) — rate limits + per-IP caps are live-server survival basics.
+
 ## Key sources
 - gamedeveloper.com "Yager sunsetting The Cycle: Frontier after cheaters cause irreparable damage" (2023)
 - getgud.io "The Graveyard of Games: Titles That Died Due to Cheaters and Griefers" (2024)
@@ -79,3 +100,4 @@ Research compiled 2026-08-01. Two rounds of web research (general + Reddit round
 - tech4gamers.com "AI Anti-Cheat is Finally Winning in 2026" (Mar 2026)
 - github.com/orgs/community discussion #198741 "Is AI quietly changing the cheating problem?" (Jun 2026)
 - Kanervisto, Kinnunen, Hautamäki — "GAN-Aimbots: Using Machine Learning for Cheating in First Person Shooters" (IEEE ToG, 2022)
+- reddit.com/r/gamedev "What's the Worst Economy Hacks and How Did You Fix Them?" (142skxb); r/NewWorld (Silver/Gold dupe saga); r/gaming Rust "RAIDED / DESTROYED BY HACKERS"; r/RedDeadOnline 187u4hk; r/hypixel pvq0zh (Aug 2025 Bedwars wave) + nuvukl (Watchdog anti-kb); hypixel.net support FAQ ("Will Hypixel ever be cheater-free?"); r/MMORPG ww3wkh (exploit stories); r/diablo3 "Gold Dupe Exploit Cripples D3 Economy"; r/MortalOnline 1cmq24b (exploits/RMT); ea.com forums (Battlefield V server sabotage); steamcommunity.com GTA V hacker reports; youtube "How Hackers DESTROYED Hypixel Forever" (Jun 2026); instagram Mini Militia "Hackers destroyed this game" (May 2026)
