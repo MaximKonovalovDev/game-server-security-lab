@@ -172,6 +172,33 @@ patterns from or move to. 6 web searches + 4 GitHub API queries
 
 ---
 
+## PART E — CASE STUDIES: GAMES KILLED BY CHEATING + AI-ERA THREAT MODEL (verified 2026-08-01)
+
+Full write-up + sources: `reports/RESEARCH-002-killed-by-cheaters-ai-threats.md`.
+
+### E1. The pattern behind every death (APB, H1Z1, The Cycle: Frontier, RYL, SWG, Krunker...)
+```
+client trusted + weak/no anti-cheat + no server validation
+  → legit players leave → revenue dies → shutdown
+```
+The Cycle: Frontier is the cleanest modern case — Yager officially cited "irreparable damage" from cheaters. RYL (Risk Your Life, ryl.com.my, Youxiland Malaysia, 2005) died the classic way: multihit, dupes, damage edits, WPE Pro packet editing, GameGuard bypass → PvP unplayable + economy flooded → subs quit → shutdown; leaked server files then fed a private-server explosion. r/MMORPG adds nuance: RYL2's subscription swap sealed it (hacking was the enabler).
+
+### E2. Web-game reality (your future web build)
+Browser games are 100% exposed — devtools reads your JS/protocol instantly; hacks are Tampermonkey scripts or console pastes (Krunker.io, .io genre) or Lua executors (Roblox: JJSploit 69M+ downloads, 2016 data breach, "datamodel vulns crash game servers" per Roblox's own HackerOne scope). **Server-side validation is everything for web games.**
+
+### E3. AI-era threat model — what changed (2026)
+- **Cheat production cost → ~zero** (LLMs write memory hacks/packet tools/injects in minutes).
+- **CV aimbots on second PC/capture card** (YOLO on the screen, hardware input emulation) — invisible to client anti-cheat (Vanguard/EAC).
+- **"Humanized" cheats** — trained hesitation/missed shots; GAN-Aimbots evaded automatic + human detection.
+- **AI everywhere else:** recon, fuzzing, credential stuffing, economy botting, phishing.
+
+### E4. What AI did NOT change (the defense)
+- **Every cheat still sends packets through your protocol** — server-side validation cannot be bypassed by AI (GAN-Aimbots paper: behavioral server analysis "cannot be bypassed").
+- 2026 defense trend: **server-side AI anomaly detection** — YAACS (arXiv Jul 2026: 88.6% acc / 0.97% FPR), FairFight/VACNet-style telemetry.
+- **Defense map:** NET-3 movement validation, NET-1/2 caps, NET-4 rate limits (AI protocol exploits) · packet-timing telemetry (AI bots) · never trust the client (memory hacks) · HMAC ticket auth (web JS exposure) · duplicatePeers=2 + ConnectionsLimit + handshake limits (AI floods) · 2FA + revocable tickets (credentials).
+
+---
+
 ## Immediate next actions (in order)
 1. `[use]` Wire the server + fix NET-1/NET-2/NET-4 (game code).
 2. `[use]` Write the Wireshark Lua dissector for PacketIds 1-8 + combat 200 (keeps in `tools/`).

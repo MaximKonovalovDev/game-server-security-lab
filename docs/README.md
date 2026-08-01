@@ -16,6 +16,7 @@ project is never modified — it is only launched and attacked.
 | **[docs/DEPLOY-GCP.md](DEPLOY-GCP.md)** | Card-optional runbook: GCP signup/upgrade-before-day-90, e2-micro + Standard Tier + static IP, Flax Linux headless cook command, `-headless -mute -null -std` run, systemd service, hardening, cost guardrails. |
 | **[docs/WEB-HOSTING.md](WEB-HOSTING.md)** | Web multiplayer game hosting (July 2026 research): free no-card WebSocket hosts (Cloudflare Workers+DO/PartyKit, Render, Deno Deploy, Firebase Spark), pub/sub relays (Apinator/Supabase Realtime/Ably — lobby-tier, message-quota math), Tailscale Funnel verdict (HTTP-only, no WS) & Codespaces public playtest, zero-cost P2P WebRTC (PeerJS + Cloudflare TURN 1TB free), Flax web-export reality (experimental, no C# yet), web security notes. |
 | **[reports/FINDINGS-001-initial-audit.md](../reports/FINDINGS-001-initial-audit.md)** | First real security audit of the game's network code: NET-0 (no runnable server), NET-1/2 HIGH (unbounded allocs), NET-3/4/5 MED (validation/rate/range gaps). |
+| **[reports/RESEARCH-002-killed-by-cheaters-ai-threats.md](../reports/RESEARCH-002-killed-by-cheaters-ai-threats.md)** | Case studies: games destroyed by cheaters (APB, H1Z1, The Cycle: Frontier, SWG, RYL/ryl.com.my deep dive, web games Roblox/Krunker/.io), AI-era threat model 2026 (CV aimbots, humanized cheats, server-side AI detection), defense mapping. |
 
 ## Map to phases
 
