@@ -242,6 +242,16 @@ WS interception = 5-line `WebSocket.prototype.send` monkey-patch or WebSocket De
 ### F7. Lab mapping
 Our fuzz_enet.py/flax_enet.py/fake-server = the attacker F1-F5 describes; NET-1..5 findings = L2/L3; attack-run.ps1 = Pwn3 proxy pattern once Portwarp tunnel is live. Defense acceptance criteria for the NET-* fixes come from this spec.
 
+## PART G — AI SENTINEL: MINI-AI 24/7 SERVER WATCHDOG (spec 2026-08-01)
+
+Full spec: `docs/AI-SENTINEL.md`. **Built on the user's proven FlaxMCP pipeline** (in-process ONNX classifiers: query-router 93.4% / tool-intent 99%, ~85 s training on RTX 3050, CPU inference ~10 ms; env-var providers, advisory-only, graceful degradation — train-mini-ai-on-flax-code.md §9.5-9.8).
+
+- **Tiers:** T0 thresholds (z-scores, always on, no ML) → T1 Isolation Forest on ~14 session features (PPS/bytes/size-var, movement deltas + speed-exceeded, bad-MAC/replay-seq counts, unknown-ID counts, handshake-attempts, hit accuracy, burstiness, ping jitter) → T2 supervised MLP once ≥500 labels.
+- **Data generator = the lab:** attack sessions from flax_enet.py/fuzz_enet.py label the attack class; walkthrough mode + live players = clean; confirmed shadow-queue reviews = T2 labels. FPR gate < 1% (YAACS bar: 88.6%/0.97%).
+- **Rules copied from the FlaxMCP architecture:** advisory-only (flag → shadow → review → confirm — never auto-ban), graceful degradation, env-var model path (`GAME_SENTINEL_MODEL_PATH`), receipts + SHA-256, stay float32 unless quant-fixture validation passes (their int8 lesson), keep thresholds secret (adversarial ML: cheaters probe detectors → retrain per new lab attack shape).
+- **Ops:** nightly retrain loop → model vN → restart; shadow queue in `sentinel/labels/confirmed.jsonl`.
+- **Test matrix:** every lab attack must fire its feature; 10 clean baseline sessions = 0 flags before any live deployment.
+
 ---
 
 ## Immediate next actions (in order)
