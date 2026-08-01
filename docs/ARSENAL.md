@@ -203,6 +203,45 @@ Browser games are 100% exposed — devtools reads your JS/protocol instantly; ha
 3. **Server validation can't stop CV/humanized bots** — behavior telemetry + server authority is the only unbypassable layer.
 4. **Hackers sabotage servers themselves** — Battlefield V "cheaters draining servers"; GTA V teleport/crash; Red Dead Online: modders cited as why Rockstar abandoned updates.
 
+## PART F — HOW PACKET GAMES ARE ACTUALLY BROKEN: THE 5 TECHNIQUES + ENet SURFACE + DEFENSE SPEC (verified 2026-08-01)
+
+Full write-up + sources: `reports/RESEARCH-003-protocol-hacking-mechanics.md`.
+
+### F1. The 5 attack techniques (in order of tool sophistication)
+1. **Winsock/LSP interception** — WPE Pro: attach process → sniff send/sendto → filter rewrites/replays. Killed by in-process protections; server validation is the only defense.
+2. **In-process hooking** — MapleStory: 5-byte JMP on the Send function (`VirtualProtect` RWX), or call the game's native send with forged packets (MaplePE DLL injection); AoS DLL hacks (offsets.h + dllmain). Undetectable by the server; damage bounded by server validation only.
+3. **MITM proxy** — client → local proxy → server; edit/forge/inject (RO packet editor 2009, Pwn Adventure 3 TCP proxy). Same as a bot from the server's view.
+4. **Full protocol reimplementation** — OpenKore (RO bot in Perl), openspades/pyspades/BetterSpades (AoS rebuilt from public docs), l2js-client. No client at all → only server authority + secret session state can stop it.
+5. **Anti-cheat bypass** — L2 SmartGuard black-boxed via `SendPacket` offsets + per-server decryption DLLs (newxor.dll); MapleStory HackShield CRC patched / EHSvc killed; RYL GameGuard bypass. **Every AC gets bypassed in its lifetime — server-side behavioral analysis is the only layer research calls unbypassable.**
+
+### F2. ENet attack surface (verified against vendored lsalzman/enet source)
+- **No encryption, no auth, by design** — plaintext, forgeable, MITM-able handshake (connectID only).
+- **`duplicatePeers` defaults to 4095 (= unlimited)** — CONNECT floods from one IP are NOT rejected unless you set it (host.c:103; Flax exposes `duplicatePeers=2`).
+- Fragment reassembly state per peer (bitmap + reliable-seq advance by fragmentCount-1) — second-order DoS; bounds enforced in protocol.c.
+- Peer timeouts: limit 32, min 5 s, max 30 s (slow-drip keeps dead peers alive).
+- **Historical protocol.c remote-DoS CVEs**: CVE-2006-1194 (signedness in `enet_protocol_handle_incoming_commands`, Cube/Sauerbraten/Duke3D), CVE-2006-1195 (send-fragment crash). Exactly the code we fuzz with boofuzz.
+- All transport hardening = config: duplicatePeers, ConnectionsLimit, `enet_host_bandwidth_limit`.
+
+### F3. The two canonical case studies
+- **Ace of Spades**: public byte-level protocol docs (piqueserver.org) → 3 reimplementations; the docs literally warn "server should verify hits to prevent abuse" + "reasonable limits on chat length and frequency" — our NET-3/NET-4 findings, confirmed in the wild on an ENet game.
+- **Pwn Adventure 3** (free, intentionally vulnerable MMO): the canonical training blueprint = differential packet analysis → Wireshark Lua dissector → async proxy → replay/teleport/inject → binary RE. 1:1 matches our lab phases; beaujeant/PwnAdventure3 repo has protocol doc + dissector + proxy as reference implementations.
+
+### F4. 2026 seven-pillar cheat taxonomy (Anybrain) + the tell for each
+Pixel AI bots (ms-window consistency) · CV aimbots (input/UI mismatch) · DMA cards (behavioral only) · **state manipulation** (packet bursts at engagement windows — our NET-3 class) · ESP (gaze through walls) · macros (frame-perfect 3h+) · exploits (impossible coords in log). Plus CaaS (Discord/TikTok), private cheats ($200+/mo, auto-update), **humanized AI bots trained to make mistakes**. Market: ~14% cheater rate unprotected FPS lobbies vs Valorant <0.5% (kernel + behavioral ML); new variants appear 4-6 h after a ban wave → **patch cadence beats ban waves**.
+
+### F5. Web-game mechanics (future web build)
+WS interception = 5-line `WebSocket.prototype.send` monkey-patch or WebSocket DevTools ext (1.1k★, message simulation); **CSWSH** (cookies sent with handshake regardless of origin — check Origin!); "auth happens once at handshake" pitfall → per-message HMAC/tickets, auth before ANY data, token invalidation on logout.
+
+### F6. Defense-prep spec for the Flax server (L1-L5)
+- **L1 transport (config):** `duplicatePeers=2`, ConnectionsLimit 16-32, `enet_host_bandwidth_limit`, per-IP handshake rate limit (CONNECT flood = cheapest attack).
+- **L2 application:** server owns ALL state; clients send intent only; movement delta validation per tick; per-session monotonic counters + timestamps kill replay.
+- **L3 session integrity:** per-session HMAC key = server secret + client connectID, HMAC critical packets. Kills WPE filters/proxies/replay until binary is reversed (Flax = expensive). Web build: HMAC is anti-accident only (JS extractable).
+- **L4 telemetry (mini-Watchdog):** per-session packet rate/size/inter-arrival variance/movement deltas/hit accuracy; alert on anomalies; thresholds + human review (no ML needed at our scale).
+- **L5 ops:** fast patch cadence; community report channel; MFA/revocable tickets; never publish protocol docs (AoS lesson).
+
+### F7. Lab mapping
+Our fuzz_enet.py/flax_enet.py/fake-server = the attacker F1-F5 describes; NET-1..5 findings = L2/L3; attack-run.ps1 = Pwn3 proxy pattern once Portwarp tunnel is live. Defense acceptance criteria for the NET-* fixes come from this spec.
+
 ---
 
 ## Immediate next actions (in order)
