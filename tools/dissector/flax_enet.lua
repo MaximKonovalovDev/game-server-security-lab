@@ -4,6 +4,11 @@
 -- no checksum). Game messages (Flax NetworkMessage) ride as raw channel-0
 -- packet payloads: packet-id byte + little-endian fields.
 --
+-- ENet-core command coverage absorbed from cgutman/wireshark-enet-dissector
+-- (GPLv3, tools/reference/) + verified against lsalzman/enet protocol.h:
+-- CONNECT/VERIFY full field layout, DISCONNECT data, BANDWIDTH_LIMIT,
+-- THROTTLE_CONFIGURE, SEND_FRAGMENT start seq.
+--
 -- Install: copy to "%APPDATA%\Wireshark\plugins\flax_enet.lua" (or
 -- Wireshark's personal plugins dir) and restart Wireshark. Filter: udp.port 7777
 
@@ -49,6 +54,14 @@ local f_mtu = ProtoField.uint32(NAME .. ".mtu", "MTU", base.DEC)
 local f_window = ProtoField.uint32(NAME .. ".window", "Window Size", base.DEC)
 local f_channels = ProtoField.uint32(NAME .. ".channels", "Channel Count", base.DEC)
 local f_connect_id = ProtoField.uint32(NAME .. ".connect_id", "Connect ID", base.HEX)
+local f_connect_data = ProtoField.uint32(NAME .. ".connect_data", "Connect Data", base.HEX)
+local f_disconnect_data = ProtoField.uint32(NAME .. ".disconnect_data", "Disconnect Data", base.HEX)
+local f_in_bw = ProtoField.uint32(NAME .. ".in_bw", "Incoming Bandwidth", base.DEC)
+local f_out_bw = ProtoField.uint32(NAME .. ".out_bw", "Outgoing Bandwidth", base.DEC)
+local f_throttle_interval = ProtoField.uint32(NAME .. ".throttle_interval", "Throttle Interval", base.DEC)
+local f_throttle_accel = ProtoField.uint32(NAME .. ".throttle_accel", "Throttle Acceleration", base.DEC)
+local f_throttle_decel = ProtoField.uint32(NAME .. ".throttle_decel", "Throttle Deceleration", base.DEC)
+local f_frag_start_seq = ProtoField.uint16(NAME .. ".frag_start_seq", "Fragment Start Seq", base.DEC)
 local f_bandwidth = ProtoField.uint32(NAME .. ".bandwidth", "Bandwidth", base.DEC)
 
 -- Game message fields -------------------------------------------------------
@@ -73,8 +86,11 @@ local f_game_raw = ProtoField.bytes(NAME .. ".raw", "Raw Payload")
 p_flax.fields = { f_header, f_peer_id, f_session, f_flags, f_sent_time,
                   f_command, f_cmd_flags, f_channel, f_seq, f_acked_seq,
                   f_data_len, f_unrel_seq, f_group, f_frag_total, f_frag_num,
-                  f_frag_count, f_frag_offset, f_out_peer, f_mtu, f_window,
-                  f_channels, f_connect_id, f_bandwidth,
+                  f_frag_count, f_frag_offset, f_frag_start_seq,
+                  f_out_peer, f_mtu, f_window, f_channels, f_connect_id,
+                  f_connect_data, f_disconnect_data, f_in_bw, f_out_bw,
+                  f_throttle_interval, f_throttle_accel, f_throttle_decel,
+                  f_bandwidth,
                   f_game_id, f_game_name, f_game_token_len, f_game_token,
                   f_game_state, f_game_guid, f_game_count, f_game_msg,
                   f_game_has_sender, f_game_event, f_game_attacker, f_game_target,
@@ -253,16 +269,28 @@ function p_flax.dissector(tvb, pkt, tree)
             ct:add(f_mtu, tvb(off + 4, 4))
             ct:add(f_window, tvb(off + 8, 4))
             ct:add(f_channels, tvb(off + 12, 4))
-            ct:add(f_connect_id, tvb(off + 40, 4))
-            off = off + 52
+            ct:add(f_in_bw, tvb(off + 16, 4))
+            ct:add(f_out_bw, tvb(off + 20, 4))
+            ct:add(f_throttle_interval, tvb(off + 24, 4))
+            ct:add(f_throttle_accel, tvb(off + 28, 4))
+            ct:add(f_throttle_decel, tvb(off + 32, 4))
+            ct:add(f_connect_id, tvb(off + 36, 4))
+            ct:add(f_connect_data, tvb(off + 40, 4))
+            off = off + 44
         elseif base_cmd == CMD_VERIFY then
             ct:add(f_out_peer, tvb(off, 2))
             ct:add(f_mtu, tvb(off + 4, 4))
             ct:add(f_window, tvb(off + 8, 4))
             ct:add(f_channels, tvb(off + 12, 4))
+            ct:add(f_in_bw, tvb(off + 16, 4))
+            ct:add(f_out_bw, tvb(off + 20, 4))
+            ct:add(f_throttle_interval, tvb(off + 24, 4))
+            ct:add(f_throttle_accel, tvb(off + 28, 4))
+            ct:add(f_throttle_decel, tvb(off + 32, 4))
             ct:add(f_connect_id, tvb(off + 36, 4))
-            off = off + 48
+            off = off + 40
         elseif base_cmd == CMD_DISCONNECT then
+            ct:add(f_disconnect_data, tvb(off, 4))
             off = off + 4
         elseif base_cmd == CMD_PING then
             -- no body
@@ -302,16 +330,22 @@ function p_flax.dissector(tvb, pkt, tree)
             end
             off = off + dlen
         elseif base_cmd == CMD_SEND_FRAGMENT then
-            ct:add(f_frag_total, tvb(off + 12, 4))
+            ct:add(f_frag_start_seq, tvb(off, 2))
             ct:add(f_frag_count, tvb(off + 4, 4))
             ct:add(f_frag_num, tvb(off + 8, 4))
+            ct:add(f_frag_total, tvb(off + 12, 4))
             ct:add(f_frag_offset, tvb(off + 16, 4))
             local dlen = be16(tvb, off + 2)
             ct:add(f_data_len, tvb(off + 2, 2), dlen)
             off = off + 20 + dlen
         elseif base_cmd == CMD_BANDWIDTH then
+            ct:add(f_in_bw, tvb(off, 4))
+            ct:add(f_out_bw, tvb(off + 4, 4))
             off = off + 8
         elseif base_cmd == CMD_THROTTLE then
+            ct:add(f_throttle_interval, tvb(off, 4))
+            ct:add(f_throttle_accel, tvb(off + 4, 4))
+            ct:add(f_throttle_decel, tvb(off + 8, 4))
             off = off + 12
         else
             break

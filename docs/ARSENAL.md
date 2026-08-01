@@ -149,7 +149,7 @@ patterns from or move to. 6 web searches + 4 GitHub API queries
 ### D3. Wireshark dissector
 | Repo | What it is | Verdict |
 |---|---|---|
-| **cgutman/wireshark-enet-dissector** | Pre-existing ENet Wireshark dissector | [use] **diff vs our `flax_enet.lua`** — absorb its ENet-core command coverage instead of rewriting |
+| **cgutman/wireshark-enet-dissector** | Pre-existing ENet Wireshark dissector | ✅ **absorbed 2026-08-01** — ENet-core coverage merged into `flax_enet.lua`: CONNECT/VERIFY full layout (bandwidth + throttle fields, connect data), DISCONNECT data, BANDWIDTH_LIMIT, THROTTLE_CONFIGURE, FRAGMENT start seq; fixed pre-existing bug (CONNECT connectID read at +40 = `data` field; now +36 per lsalzman/enet protocol.h, bodies 44B/40B). Game-message dissection + flags + expert info stay ours. |
 
 ### D4. Reversing & attack-side knowledge (Phase 2 VM)
 | Repo | What it is | Verdict |
@@ -164,8 +164,8 @@ patterns from or move to. 6 web searches + 4 GitHub API queries
 - No Flax-specific security research repos at all.
 
 ### Recommended adoptions (proposed, confirm before vendoring)
-1. `[use]` ENet-CSharp as rogue-client codec reference (C#, matches game).
-2. `[use]` lsalzman/enet source → re-verify WIRE-FORMAT.md + fuzz defs.
+1. ✅ `[use]` ENet-CSharp as rogue-client codec reference (C#, matches game) — **cloned 2026-08-01** to `tools/reference/ENet-CSharp` (git-ignored).
+2. ✅ `[use]` lsalzman/enet source → re-verify WIRE-FORMAT.md + fuzz defs — **cloned 2026-08-01** to `tools/reference/enet` (git-ignored); CONNECT/VERIFY body sizes **corrected 52B/48B → 44B/40B** (connectID @36) in WIRE-FORMAT.md + dissector per protocol.h.
 3. `[use]` cgutman dissector → diff vs `flax_enet.lua`, absorb ENet-core coverage.
 4. `[study]` BetterSpades + mpgameserver for new attack scenarios (NET-3 flood shapes).
 5. `[study]` NetworkSample for NET-3 server-authoritative patterns.

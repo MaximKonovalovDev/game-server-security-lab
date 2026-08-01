@@ -28,8 +28,8 @@ Commands (repeated until datagram end):
 | Command | id | Body after header |
 |---|---|---|
 | ACKNOWLEDGE | 1 | `u16 BE receivedReliableSequenceNumber`, `u16 BE receivedSentTime` |
-| CONNECT | 2 | `u16 outgoingPeerID, u8 inSession, u8 outSession, u32 mtu, u32 windowSize, u32 channelCount, u32 inBW, u32 outBW, u32 throttleInterval, u32 throttleAccel, u32 throttleDecel, u32 connectID, u32 data` (52B) |
-| VERIFY_CONNECT | 3 | same as CONNECT minus `data` (48B) |
+| CONNECT | 2 | `u16 outgoingPeerID, u8 inSession, u8 outSession, u32 mtu, u32 windowSize, u32 channelCount, u32 inBW, u32 outBW, u32 throttleInterval, u32 throttleAccel, u32 throttleDecel, u32 connectID, u32 data` (44B; connectID @36) |
+| VERIFY_CONNECT | 3 | same as CONNECT minus `data` (40B; connectID @36) |
 | DISCONNECT | 4 | `u32 data` |
 | PING | 5 | — |
 | SEND_RELIABLE | 6 | `u16 BE dataLength` + payload |
