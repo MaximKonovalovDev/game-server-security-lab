@@ -270,6 +270,18 @@ Full spec: `docs/ATTACKER-INTEL.md`. Mission: every attacker becomes data. Own-l
 
 ---
 
+## PART I — MCP-SECURITY: SECURING THE USER'S MCP PLUGIN + ITS AI (spec 2026-08-01)
+
+Full spec: `docs/MCP-SECURITY.md`. Threat model: the cheater/internet can put text where the AI reads and packets where the server sees — the MCP plugin is part of the game's attack surface. Audit of `C:\flax\flax-mcp` facts.
+
+- **A. Prompt injection via game content (highest):** chat/names/MOTD/dialogue/docs/logs are attacker-authored text entering AI reasoning. Already good: IntentSievedProvider (tests include "ignore all previous instructions…"), GuardrailPipeline, CSharpDenylist/CodePreValidator (denies HttpClient/Assembly.Load in AI code), Llm7 freetier gates. Gaps: data-vs-instructions wrapping (structural), server-side tool permission tiers (read-only default; exec/write/network = approval), no tool echo into chat, sentinel labels human-confirmed (poisoning channel!), NPC dialogue LLM = no tools.
+- **B. MCP endpoint (loopback :8765, McpHttpServer.cs):** already good: loopback bind, OriginValidator (Host+Origin, loopback CSRF/DNS-rebind, CVE-2025-66414/2026-35568 class), body caps + timeouts. Verify: per-session auth token on /mcp (local malware/second user = tokenless tool calls), no CORS `*`/preflight rejected, port file perms. **Hard rule: MCP port is never tunneled** (Portwarp/ngrok/Tailscale → public tool invocation; stdio-over-SSH if remote dev needed).
+- **C. Assembly loading + tool discovery:** KernelLoader/BucketLoader Assembly.LoadFile from plugin dirs; auto-discovered tool definitions = attacker-suppliable. Fix: signed/hash-verified loads (mismatch = attacker event), scan paths = read-only install dir only, tool-manifest schema validation + capability allowlist, secret redaction in read tools, allowlisted HTTP hosts (SSRF).
+- **Cross-links:** attacker will poison the sentinel AI first (A4 = AI-SENTINEL dependency); they will RPE us (extraction probing = ATTACKER-INTEL L4 signal); honey prompts with beacon strings = linkage proof (L1.4 pattern).
+- **Lab tests:** chat injection, dialogue jailbreak (RPE), no-Origin/DNS-rebind/tokenless/CORS probes, unsigned DLL drop, fake tool-def smuggling, tunnel checklist.
+
+---
+
 ## Immediate next actions (in order)
 1. `[use]` Wire the server + fix NET-1/NET-2/NET-4 (game code).
 2. `[use]` Write the Wireshark Lua dissector for PacketIds 1-8 + combat 200 (keeps in `tools/`).
