@@ -282,6 +282,31 @@ Full spec: `docs/MCP-SECURITY.md`. Threat model: the cheater/internet can put te
 
 ---
 
+## PART J — USER-DOSSIER: PAINT EVERY PLAYER, OBSERVE EVERY ATTACKER (spec 2026-08-01)
+
+Full spec: `docs/USER-DOSSIER.md`. One persistent per-user record for ALL sessions (attacker = user + flags, no us/them split).
+
+- **Ledger:** per-session JSONL — identity (IP weak edge, machine clock-drift ID, protocol DNA, tool fingerprint, client build — strongest signal wins), whitelisted behavior breadcrumbs (zones, items incl. canaries, commands, sanitized chat), SessionMetrics counters verbatim, verdict + reason tags, links into the L4 graph.
+- **Breadcrumb stream:** append-only events; clean = coarse summarized (≤1/s, no raw chat), flagged = full detail; live tail + offline PCAP replay with overlays.
+- **Dashboard:** live board, dossier page (timeline, recidivism), flag queue → confirm/clear → sentinel labels, watch mode, cluster view, quarantine stats. Read-only, approval-gated (MCP-SECURITY tiers).
+- **Cross-session memory:** connect → machine ID lookup → attach + recidivism event; flagged-machine return = auto-shadow (never auto-ban); account bursts from one machine = ban-evasion cluster.
+- **Live-shadow ops:** flag → shadow → watch → escalate capture → route to quarantine at reconnect in waves → decoy test (Cuckoo's Egg) → cluster wave endgame. OPSEC: observer invisible, console unreachable via game content.
+- **Honest limits:** only what touches the server (packets/actions/timing), never screen/processes; tunnel edge NATs all IPs → machine ID + DNA + auth envelope are the primary edges; VPN hides face → fingerprint cluster not identity; privacy-minimal by design (sanitized chat, summarized clean data).
+- **Lab tests:** per-session dossier, breadcrumb flow, machine-ID persistence (VM/2 IPs/2 accounts → 1 dossier), auto-shadow on return, full capture on flag, review loop → labels, replay, console isolation.
+
+## PART K — SECURED-SERVER: THE TOP-SECURED HOSTED BUILD (integration blueprint 2026-08-01)
+
+Full spec: `docs/SECURED-SERVER.md` — the one doc that fuses everything into ONE deployment.
+
+- **Topology:** single public port UDP 7777 via Portwarp edge; MCP port never leaves the box; three processes (live / quarantine lobby / decoy twin, env-var role, separate DBs); edge-IP twist → budgets are session-based (auth envelope + fingerprints), IP only a weak graph edge.
+- **Process hardening:** low-privilege account, headless, firewall allows only tunnel edge → 7777, scoped Defender, load gates (ConnectionsLimit 16-32, duplicatePeers=2, handshake budget), patch cadence + opcode/HMAC-key rotation per release (key ceremony), no public protocol docs (honey docs only), encrypted daily backups.
+- **Data:** dossier DB + PCAPs + labels encrypted at rest; secrets env-only; own-logs-only privacy/legality.
+- **Ops loop:** T0 always-on → flags → shadow → waves; T1 on session end; nightly miner/retrain → receipts → model vN; abuse-report packager; human reviews flags, authorizes waves, nothing auto-bans.
+- **Build order:** P0 baseline fixes → P1 identity (envelope, fingerprints, ledger) → P2 sentinel shadow (FPR gate) → P3 public (Portwarp + quarantine + decoy) → P4 intel ops (miner, tool FP, abuse, honey rotation) → P5 MCP hardening.
+- **Acceptance:** all lab attacks detected, 0 clean flags, identity survives IP hop, quarantine quit-rate >> real, abuse package one-command, MCP endpoint fails all probes, zero attacker-reachable paths to DB/keys/model/tools.
+
+---
+
 ## Immediate next actions (in order)
 1. `[use]` Wire the server + fix NET-1/NET-2/NET-4 (game code).
 2. `[use]` Write the Wireshark Lua dissector for PacketIds 1-8 + combat 200 (keeps in `tools/`).
