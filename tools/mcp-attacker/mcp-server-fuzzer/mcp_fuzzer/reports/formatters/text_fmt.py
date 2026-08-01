@@ -1,0 +1,178 @@
+"""Text formatter implementation."""
+
+from __future__ import annotations
+
+from typing import Any
+
+from ...types import extract_tool_runs
+from .common import (
+    calculate_protocol_success_rate,
+    normalize_report_data,
+    summarize_tool_outcomes,
+    summarize_tool_runs,
+)
+
+
+def _result_has_failure(result: dict[str, Any]) -> bool:
+    """Return True when a result represents an error condition."""
+    return bool(
+        result.get("exception")
+        or not result.get("success", True)
+        or result.get("error")
+        or result.get("server_error")
+    )
+
+
+class TextFormatter:
+    """Handles text formatting for reports."""
+
+    def save_text_report(
+        self,
+        report_data: dict[str, Any] | Any,
+        filename: str,
+    ):
+        data = normalize_report_data(report_data)
+        mode = str((data.get("metadata") or {}).get("mode", "all"))
+        with open(filename, "w", encoding="utf-8") as f:
+            f.write("=" * 80 + "\n")
+            f.write("MCP FUZZER REPORT\n")
+            f.write("=" * 80 + "\n\n")
+
+            if "metadata" in data:
+                f.write("FUZZING SESSION METADATA\n")
+                f.write("-" * 40 + "\n")
+                for key, value in data["metadata"].items():
+                    f.write(f"{key}: {value}\n")
+                f.write("\n")
+
+            if "summary" in data:
+                f.write("SUMMARY STATISTICS\n")
+                f.write("-" * 40 + "\n")
+                summary = data["summary"]
+
+                if "tools" in summary:
+                    tools = summary["tools"]
+                    f.write(f"Tools Tested: {tools['total_tools']}\n")
+                    f.write(f"Total Tool Runs: {tools['total_runs']}\n")
+                    f.write(f"Tools with Errors: {tools['tools_with_errors']}\n")
+                    f.write(
+                        f"Tools with Exceptions: {tools['tools_with_exceptions']}\n"
+                    )
+                    f.write(f"Tool Success Rate: {tools['success_rate']:.1f}%\n\n")
+
+                if "protocols" in summary and mode not in {"tools"}:
+                    protocols = summary["protocols"]
+                    f.write(
+                        f"Protocol Types Tested: {protocols['total_protocol_types']}\n"
+                    )
+                    f.write(f"Total Protocol Runs: {protocols['total_runs']}\n")
+                    f.write(
+                        (
+                            "Protocol Types with Errors: "
+                            f"{protocols['protocol_types_with_errors']}\n"
+                        )
+                    )
+                    f.write(
+                        (
+                            "Protocol Types with Exceptions: "
+                            f"{protocols['protocol_types_with_exceptions']}\n"
+                        )
+                    )
+                    f.write(
+                        f"Protocol Success Rate: {protocols['success_rate']:.1f}%\n\n"
+                    )
+
+            if "spec_summary" in data and mode not in {"tools"}:
+                spec_summary = data.get("spec_summary") or {}
+                totals = spec_summary.get("totals", {})
+                if totals.get("total", 0) > 0:
+                    f.write("SPEC GUARD SUMMARY\n")
+                    f.write("-" * 40 + "\n")
+                    f.write(f"Total Checks: {totals.get('total', 0)}\n")
+                    f.write(f"Failed: {totals.get('failed', 0)}\n")
+                    f.write(f"Warned: {totals.get('warned', 0)}\n")
+                    f.write(f"Passed: {totals.get('passed', 0)}\n\n")
+                    by_spec = spec_summary.get("by_spec_id") or {}
+                    for spec_id, details in by_spec.items():
+                        f.write(f"{spec_id}: ")
+                        f.write(
+                            f"{details.get('failed', 0)} failed, "
+                            f"{details.get('warned', 0)} warned, "
+                            f"{details.get('passed', 0)} passed "
+                            f"({details.get('total', 0)} total)\n"
+                        )
+                    f.write("\n")
+
+            if "tool_results" in data:
+                f.write("TOOL FUZZING RESULTS\n")
+                f.write("-" * 40 + "\n")
+                for tool_name, results in data["tool_results"].items():
+                    runs, _ = extract_tool_runs(results)
+                    stats = summarize_tool_runs(runs)
+                    outcomes = summarize_tool_outcomes(runs)
+                    f.write(f"\nTool: {tool_name}\n")
+                    f.write(f"  Total Runs: {stats['total_runs']}\n")
+                    f.write(f"  Server Rejected: {outcomes['server_rejected']}\n")
+                    f.write(
+                        (
+                            "  Accepted Malformed Findings: "
+                            f"{outcomes['accepted_malformed']}\n"
+                        )
+                    )
+                    f.write(
+                        (
+                            "  Transport/Protocol Anomalies: "
+                            f"{outcomes['anomaly']}\n"
+                        )
+                    )
+                    f.write(f"  Crashes: {outcomes['crashed']}\n")
+                    f.write(f"  Exceptions: {stats['exceptions']}\n")
+                    f.write(f"  Safety Blocked: {stats['safety_blocked']}\n")
+
+                    if runs:
+                        f.write(
+                            "  Handled-Correctly Rate: "
+                            f"{float(stats['success_rate']):.1f}%\n"
+                        )
+
+            if "protocol_results" in data and mode not in {"tools"}:
+                f.write("\n\nPROTOCOL FUZZING RESULTS\n")
+                f.write("-" * 40 + "\n")
+                for protocol_type, results in data["protocol_results"].items():
+                    f.write(f"\nProtocol Type: {protocol_type}\n")
+                    f.write(f"  Total Runs: {len(results)}\n")
+
+                    errors = sum(1 for r in results if _result_has_failure(r))
+                    f.write(f"  Errors: {errors}\n")
+
+                    if results:
+                        success_rate = calculate_protocol_success_rate(
+                            len(results), errors
+                        )
+                        f.write(f"  Success Rate: {success_rate:.1f}%\n")
+
+            if "safety" in data:
+                f.write("\n\nSAFETY SYSTEM DATA\n")
+                f.write("-" * 40 + "\n")
+                safety = data["safety"]
+                if "summary" in safety:
+                    summary = safety["summary"]
+                    f.write(
+                        f"Total Operations Blocked: {summary.get('total_blocked', 0)}\n"
+                    )
+                    f.write(
+                        (
+                            "Unique Tools Blocked: "
+                            f"{summary.get('unique_tools_blocked', 0)}\n"
+                        )
+                    )
+                    f.write(
+                        (
+                            "Risk Assessment: "
+                            f"{summary.get('risk_assessment', 'unknown').upper()}\n"
+                        )
+                    )
+
+            f.write("\n" + "=" * 80 + "\n")
+            f.write("Report generated by MCP Fuzzer\n")
+            f.write("=" * 80 + "\n")

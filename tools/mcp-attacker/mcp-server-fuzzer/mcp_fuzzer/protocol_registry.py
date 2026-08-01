@@ -1,0 +1,135 @@
+"""Central registry for MCP protocol types used across fuzzing components."""
+
+PROTOCOL_TYPES: tuple[str, ...] = (
+    "InitializeRequest",
+    "InitializedNotification",
+    "ProgressNotification",
+    "CancelledNotification",
+    "ListToolsRequest",
+    "CallToolRequest",
+    "ListResourcesRequest",
+    "ReadResourceRequest",
+    "SetLevelRequest",
+    "GenericJSONRPCRequest",
+    "CallToolResult",
+    "SamplingMessage",
+    "CreateMessageRequest",
+    "ListPromptsRequest",
+    "GetPromptRequest",
+    "ListRootsRequest",
+    "SubscribeRequest",
+    "UnsubscribeRequest",
+    "CompleteRequest",
+    "ListResourceTemplatesRequest",
+    "ElicitRequest",
+    "PingRequest",
+    # Result schemas
+    "InitializeResult",
+    "ListResourcesResult",
+    "ListResourceTemplatesResult",
+    "ReadResourceResult",
+    "ListPromptsResult",
+    "GetPromptResult",
+    "ListToolsResult",
+    "CompleteResult",
+    "CreateMessageResult",
+    "ListRootsResult",
+    "CreateTaskResult",
+    "GetTaskResult",
+    "GetTaskPayloadResult",
+    "ListTasksResult",
+    "CancelTaskResult",
+    "EmptyResult",
+    "ElicitResult",
+    # Notification schemas
+    "LoggingMessageNotification",
+    "ResourceListChangedNotification",
+    "ResourceUpdatedNotification",
+    "PromptListChangedNotification",
+    "ToolListChangedNotification",
+    "RootsListChangedNotification",
+    "ElicitationCompleteNotification",
+    "TaskStatusNotification",
+    # Task request schemas
+    "ListTasksRequest",
+    "GetTaskRequest",
+    "GetTaskPayloadRequest",
+    "CancelTaskRequest",
+    # Content block schemas
+    "TextContent",
+    "ImageContent",
+    "AudioContent",
+    # Resource schemas
+    "Resource",
+    "ResourceTemplate",
+    "TextResourceContents",
+    "BlobResourceContents",
+    # Tool schemas
+    "Tool",
+)
+
+DEFAULT_PROTOCOL_TYPES: tuple[str, ...] = (
+    "InitializeRequest",
+    "InitializedNotification",
+    "ListToolsRequest",
+    "CallToolRequest",
+    "ListResourcesRequest",
+    "ReadResourceRequest",
+    "ListPromptsRequest",
+    "GetPromptRequest",
+    "ListRootsRequest",
+    "SetLevelRequest",
+    "CompleteRequest",
+    "ListResourceTemplatesRequest",
+    "ElicitRequest",
+    "PingRequest",
+    "SubscribeRequest",
+    "UnsubscribeRequest",
+    "CreateMessageRequest",
+    "ListTasksRequest",
+    "GetTaskRequest",
+    "GetTaskPayloadRequest",
+    "CancelTaskRequest",
+)
+
+# Protocol types that can be executed/sent by the client (requests/notifications).
+EXECUTABLE_PROTOCOL_TYPES: tuple[str, ...] = DEFAULT_PROTOCOL_TYPES + (
+    "ProgressNotification",
+    "CancelledNotification",
+    "GenericJSONRPCRequest",
+)
+
+# JSON-RPC method metadata for schema-less fallback fuzzing: (method, is_notification).
+EXECUTABLE_PROTOCOL_METHODS: dict[str, tuple[str, bool]] = {
+    "InitializeRequest": ("initialize", False),
+    "InitializedNotification": ("notifications/initialized", True),
+    "ProgressNotification": ("notifications/progress", True),
+    "CancelledNotification": ("notifications/cancelled", True),
+    "ListToolsRequest": ("tools/list", False),
+    "CallToolRequest": ("tools/call", False),
+    "ListResourcesRequest": ("resources/list", False),
+    "ReadResourceRequest": ("resources/read", False),
+    "ListResourceTemplatesRequest": ("resources/templates/list", False),
+    "SetLevelRequest": ("logging/setLevel", False),
+    "CreateMessageRequest": ("sampling/createMessage", False),
+    "ListPromptsRequest": ("prompts/list", False),
+    "GetPromptRequest": ("prompts/get", False),
+    "ListRootsRequest": ("roots/list", False),
+    "SubscribeRequest": ("resources/subscribe", False),
+    "UnsubscribeRequest": ("resources/unsubscribe", False),
+    "CompleteRequest": ("completion/complete", False),
+    "ElicitRequest": ("elicitation/create", False),
+    "ListTasksRequest": ("tasks/list", False),
+    "GetTaskRequest": ("tasks/get", False),
+    "GetTaskPayloadRequest": ("tasks/result", False),
+    "CancelTaskRequest": ("tasks/cancel", False),
+    "PingRequest": ("ping", False),
+    "GenericJSONRPCRequest": ("tools/list", False),
+}
+
+FUZZABLE_PROTOCOL_TYPES: tuple[str, ...] = tuple(EXECUTABLE_PROTOCOL_METHODS.keys())
+
+
+# Selected protocol-type string constants (used by clients/formatters).
+READ_RESOURCE_REQUEST = "ReadResourceRequest"
+GET_PROMPT_REQUEST = "GetPromptRequest"

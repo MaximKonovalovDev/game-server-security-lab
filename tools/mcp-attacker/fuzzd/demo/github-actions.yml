@@ -1,0 +1,56 @@
+# fuzzd — MCP security scan for CI pipelines
+# Full documentation: https://github.com/ksek87/fuzzd
+
+name: MCP Security Scan
+
+on:
+  push:
+    branches: [main, "feature/**"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  fuzzd-scan:
+    name: Tool Poisoning Scan
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write  # required for SARIF upload (v0.8+)
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # ── Install fuzzd ──────────────────────────────────────────────────────
+      # Pre-built binaries available from v0.13.0: https://github.com/ksek87/fuzzd/releases
+      # Install from source (or download a release binary and place it on PATH):
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install fuzzd
+        run: cargo install --git https://github.com/ksek87/fuzzd --locked
+
+      # ── Export your server's tool definitions ──────────────────────────────
+      # Replace with however your server exposes its tool list.
+      # Output must be MCP tools/list format: { "tools": [...] }
+      - name: Export tool definitions
+        run: |
+          # Node.js MCP server:
+          #   npm ci && node server.js --dump-tools > tools.json
+          # Python MCP server:
+          #   pip install -e . && python server.py --export-tools > tools.json
+          # Demo (replace with your actual export step):
+          cp demo/servers/clean.json tools.json
+
+      # ── Scan ───────────────────────────────────────────────────────────────
+      # Exit 0 = clean. Exit 1 = critical/high findings → PR is blocked.
+      # To suppress a reviewed finding so it no longer blocks CI:
+      #   fuzzd suppress <tool> <signal> --reason "Reviewed by @alice 2026-05-23"
+      #   git add .fuzzd/suppress.toml && git commit -m "suppress: accept <tool>/<signal>"
+      - name: Scan for MCP tool poisoning patterns
+        run: fuzzd scan --schema tools.json --output sarif > fuzzd.sarif || true
+
+      # ── Upload to GitHub Code Scanning ─────────────────────────────────────
+      # Findings appear in the Security tab. Human dismissals persist across
+      # scans — no need to re-review the same finding after each push.
+      - name: Upload to GitHub Code Scanning
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: fuzzd.sarif

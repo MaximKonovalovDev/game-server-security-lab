@@ -1,0 +1,156 @@
+#!/usr/bin/env python3
+"""Tests for shared formatter helpers."""
+
+from __future__ import annotations
+
+import pytest
+
+from mcp_fuzzer.reports.formatters.common import (
+    calculate_protocol_success_rate,
+    collect_and_summarize_protocol_items,
+    collect_labeled_protocol_items,
+    normalize_report_data,
+    result_has_failure,
+    summarize_tool_outcomes,
+    summarize_protocol_items,
+    summarize_tool_runs,
+    tool_run_has_exception,
+)
+
+pytestmark = [pytest.mark.unit]
+
+
+def test_normalize_report_data_returns_dict_even_if_extra_keys():
+    data = {"a": 1, "b": 2}
+    normalized = normalize_report_data(data)
+    assert normalized is data
+
+
+def test_normalize_report_data_uses_to_dict_method():
+    class ReportLike:
+        def __init__(self):
+            self.called = False
+
+        def to_dict(self) -> dict[str, int]:
+            self.called = True
+            return {"converted": 1}
+
+    report = ReportLike()
+    normalized = normalize_report_data(report)
+    assert normalized == {"converted": 1}
+    assert report.called
+
+
+def test_calculate_protocol_success_rate_handles_zero_runs():
+    assert calculate_protocol_success_rate(0, 1) == 0.0
+
+
+def test_collect_labeled_protocol_items_filters_by_prefix():
+    results = [
+        {"label": "resource:file://alpha.txt", "success": True},
+        {"label": "prompt:beta", "success": True},
+        {"label": "tool:echo", "success": True},
+        {"label": "resource:", "success": True},
+        {"label": "unknown:gamma", "success": True},
+        {"label": 123, "success": True},
+    ]
+
+    grouped = collect_labeled_protocol_items(results, "resource")
+
+    assert "file://alpha.txt" in grouped
+    assert "beta" not in grouped
+    assert "echo" not in grouped
+    assert len(grouped["file://alpha.txt"]) == 1
+
+    tool_grouped = collect_labeled_protocol_items(results, "tool")
+    assert "echo" in tool_grouped
+
+
+def test_collect_and_summarize_protocol_items():
+    results = [
+        {"label": "prompt:alpha", "success": True},
+        {"label": "prompt:alpha", "error": "boom", "success": False},
+        {"label": "prompt:beta", "success": True},
+    ]
+
+    items, summary = collect_and_summarize_protocol_items(results, "prompt")
+
+    assert set(items.keys()) == {"alpha", "beta"}
+    assert summary["alpha"]["total_runs"] == 2
+    assert summary["alpha"]["errors"] == 1
+
+
+def test_summarize_protocol_items_detects_failures():
+    items = {
+        "alpha": [{"success": True}, {"success": False}],
+        "beta": [{"exception": "boom"}],
+    }
+
+    summary = summarize_protocol_items(items)
+
+    assert summary["alpha"]["errors"] == 1
+    assert summary["beta"]["errors"] == 1
+    assert result_has_failure({"success": False})
+
+
+def test_tool_run_has_exception_excludes_safety_blocked():
+    assert tool_run_has_exception({"exception": "boom"})
+    assert not tool_run_has_exception(
+        {"exception": "safety_blocked", "safety_blocked": True}
+    )
+
+
+def test_summarize_tool_runs_uses_non_overlapping_failure_counts():
+    summary = summarize_tool_runs(
+        [
+            {"success": True},
+            {"exception": "boom"},
+            {"success": False, "safety_blocked": True},
+        ]
+    )
+    assert summary["exceptions"] == 1
+    assert summary["safety_blocked"] == 1
+    assert summary["successful"] == 1
+    assert summary["success_rate"] == pytest.approx(33.33, rel=1e-3)
+
+
+def test_summarize_tool_runs_counts_error_only_failures_in_success_rate():
+    summary = summarize_tool_runs([{"success": False, "error": "boom"}])
+
+    assert summary["failures"] == 1
+    assert summary["successful"] == 0
+    assert summary["success_rate"] == 0.0
+
+
+def test_summarize_tool_runs_handles_non_dict_safety_blocked_entries():
+    summary = summarize_tool_runs([{"success": True}, "legacy-run"])  # type: ignore[list-item]
+
+    assert summary["safety_blocked"] == 0
+    assert summary["failures"] == 1
+
+
+def test_summarize_tool_outcomes_exposes_diagnostic_buckets():
+    outcomes = summarize_tool_outcomes(
+        [
+            {"outcome": "server_rejected"},
+            {"outcome": "accepted_malformed"},
+            {"outcome": "transport_error"},
+            {"outcome": "mutation_failed", "error": "tool_mutation_failed"},
+            {"outcome": "oversized_response", "error": "oversized_response"},
+            {"outcome": "crashed"},
+            {"exception": "boom"},
+            {"error": "boom"},
+            {"server_error": "boom"},
+            {"safety_blocked": True},
+            "legacy-run",  # type: ignore[list-item]
+        ]
+    )
+
+    assert outcomes == {
+        "server_rejected": 1,
+        "accepted_malformed": 1,
+        "anomaly": 6,
+        "crashed": 1,
+        "exceptions": 1,
+        "safety_blocked": 1,
+    }

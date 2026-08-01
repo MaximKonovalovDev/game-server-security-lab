@@ -1,0 +1,209 @@
+"""Shared formatter helpers."""
+
+from __future__ import annotations
+
+from typing import Any, Iterable, Literal, Protocol
+
+from ...evidence_fields import (
+    ACCEPTED_MALFORMED,
+    ERROR,
+    EXCEPTION,
+    OUTCOME,
+    SAFETY_BLOCKED,
+    SERVER_ERROR,
+    SUCCESS,
+)
+from ..outcome_buckets import summarize_tool_outcomes
+
+
+class SupportsToDict(Protocol):
+    def to_dict(self) -> dict[str, Any]: ...
+
+
+LabelPrefix = Literal["resource", "prompt", "tool"]
+LABEL_PREFIXES: tuple[LabelPrefix, ...] = ("resource", "prompt", "tool")
+
+
+def normalize_report_data(
+    report: dict[str, Any] | SupportsToDict,
+) -> dict[str, Any]:
+    if hasattr(report, "to_dict"):
+        return report.to_dict()  # type: ignore[return-value]
+    return report
+
+
+def calculate_tool_success_rate(
+    total_runs: int,
+    exceptions: int,
+    safety_blocked: int,
+) -> float:
+    if total_runs <= 0:
+        return 0.0
+    successful_runs = max(0, total_runs - exceptions - safety_blocked)
+    return (successful_runs / total_runs) * 100
+
+
+def tool_run_has_exception(result: dict[str, Any] | None) -> bool:
+    """Return True when a tool result has a non-safety exception."""
+    if not isinstance(result, dict):
+        return False
+    if result.get(SAFETY_BLOCKED, False):
+        return False
+    return bool(result.get(EXCEPTION))
+
+
+def tool_run_has_failure(result: dict[str, Any] | None) -> bool:
+    """Return True when a tool result should count as a failed run.
+
+    Failure classification rules are centralized here:
+    - malformed/non-dict entries are failures
+    - safety-blocked entries are failures
+    - accepted malformed input is a fuzzer finding (failure)
+    - server rejection of malformed input is success
+    - exceptions, explicit errors, or transport failures are failures
+    """
+    if not isinstance(result, dict):
+        return True
+    outcome = result.get(OUTCOME)
+    if outcome == "server_rejected":
+        return False
+    if outcome == "accepted_malformed" or result.get(ACCEPTED_MALFORMED):
+        return True
+    if result.get(SAFETY_BLOCKED, False):
+        return True
+    return bool(
+        tool_run_has_exception(result)
+        or not result.get(SUCCESS, True)
+        or result.get(ERROR)
+        or result.get(SERVER_ERROR)
+    )
+
+
+def summarize_tool_runs(runs: list[dict[str, Any]]) -> dict[str, int | float]:
+    """Return non-overlapping summary counters for tool run reporting.
+
+    ``success_rate`` is the processing-success rate: runs the fuzzer completed
+    without transport/safety/accepted-malformed failures. It does not measure
+    whether the upstream server accepted attack payloads.
+    """
+    total_runs = len(runs)
+    exceptions = sum(1 for run in runs if tool_run_has_exception(run))
+    safety_blocked = sum(
+        1
+        for run in runs
+        if isinstance(run, dict) and run.get(SAFETY_BLOCKED, False)
+    )
+    failures = sum(1 for run in runs if tool_run_has_failure(run))
+    successful = max(total_runs - failures, 0)
+    success_rate = (successful / total_runs) * 100 if total_runs > 0 else 0.0
+    return {
+        "total_runs": total_runs,
+        "exceptions": exceptions,
+        "safety_blocked": safety_blocked,
+        "failures": failures,
+        "successful": successful,
+        "success_rate": success_rate,
+    }
+
+
+def calculate_protocol_success_rate(total_runs: int, errors: int) -> float:
+    """Calculate success rate for protocol-style results."""
+    if total_runs <= 0:
+        return 0.0
+    successful_runs = max(0, total_runs - errors)
+    return (successful_runs / total_runs) * 100
+
+
+def result_has_failure(result: dict[str, Any] | None) -> bool:
+    """Return True if a protocol result represents an error condition."""
+    if not isinstance(result, dict):
+        return True
+    outcome = result.get(OUTCOME)
+    if outcome == "server_rejected":
+        return False
+    if outcome == "accepted_malformed" or result.get(ACCEPTED_MALFORMED):
+        return True
+    nested_error = None
+    result_payload = result.get("result")
+    if isinstance(result_payload, dict):
+        response = result_payload.get("response")
+        if isinstance(response, dict):
+            nested_error = response.get(ERROR)
+    return bool(
+        result.get(EXCEPTION)
+        or not result.get(SUCCESS, True)
+        or result.get(ERROR)
+        or result.get(SERVER_ERROR)
+        or nested_error
+    )
+
+
+def _parse_label(label: Any) -> tuple[LabelPrefix | None, str | None]:
+    """Parse a label formatted as '{prefix}:{name}'."""
+    if not isinstance(label, str):
+        return None, None
+    prefix, separator, name = label.partition(":")
+    if separator != ":" or not name:
+        return None, None
+    if prefix not in LABEL_PREFIXES:
+        return None, None
+    return prefix, name
+
+
+def collect_labeled_protocol_items(
+    protocol_results: Iterable[Any], prefix: LabelPrefix
+) -> dict[str, list[dict[str, Any]]]:
+    """Collect protocol results grouped by a known label prefix."""
+    items: dict[str, list[dict[str, Any]]] = {}
+    for result in protocol_results:
+        if not isinstance(result, dict):
+            continue
+        label = result.get("label")
+        parsed_prefix, name = _parse_label(label)
+        if parsed_prefix != prefix or not name:
+            continue
+        items.setdefault(name, []).append(result)
+    return items
+
+
+def summarize_protocol_items(
+    items: dict[str, list[dict[str, Any]]]
+) -> dict[str, dict[str, Any]]:
+    """Summarize grouped protocol items by runs/errors/success rate."""
+    summary: dict[str, dict[str, Any]] = {}
+    for name, item_results in items.items():
+        total_runs = len(item_results)
+        errors = sum(1 for r in item_results if result_has_failure(r))
+        success_rate = calculate_protocol_success_rate(total_runs, errors)
+        summary[name] = {
+            "total_runs": total_runs,
+            "errors": errors,
+            "success_rate": round(success_rate, 2),
+        }
+    return summary
+
+
+def collect_and_summarize_protocol_items(
+    protocol_results: Iterable[Any], prefix: LabelPrefix
+) -> tuple[dict[str, list[dict[str, Any]]], dict[str, dict[str, Any]]]:
+    """Collect labeled protocol items and summarize them."""
+    items = collect_labeled_protocol_items(protocol_results, prefix)
+    return items, summarize_protocol_items(items)
+
+
+__all__ = [
+    "LABEL_PREFIXES",
+    "LabelPrefix",
+    "SupportsToDict",
+    "calculate_protocol_success_rate",
+    "calculate_tool_success_rate",
+    "collect_and_summarize_protocol_items",
+    "collect_labeled_protocol_items",
+    "normalize_report_data",
+    "result_has_failure",
+    "summarize_protocol_items",
+    "summarize_tool_outcomes",
+    "summarize_tool_runs",
+    "tool_run_has_exception",
+    "tool_run_has_failure",
+]

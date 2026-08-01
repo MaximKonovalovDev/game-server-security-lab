@@ -1,0 +1,49 @@
+[package]
+name = "fuzzd"
+version = "0.13.0"
+edition = "2021"
+description = "Adversarial fuzzer for MCP servers and agentic tool surfaces"
+license = "MIT"
+repository = "https://github.com/ksek87/fuzzd"
+keywords = ["mcp", "fuzzing", "security", "llm", "agentic"]
+categories = ["command-line-utilities", "development-tools::testing"]
+
+[[bin]]
+name = "fuzzd"
+path = "src/main.rs"
+
+# Test-only MCP reference server, driven by the end-to-end integration tests in
+# tests/audit_stdio.rs. Gated behind `test-fixtures` so it is never built into a
+# release (release.yml runs `cargo build --release` with no features); CI's
+# `cargo test --all-features` / `cargo clippy --all-features` build and lint it.
+[[bin]]
+name = "reference_server"
+path = "tests/fixtures/reference_server.rs"
+required-features = ["test-fixtures"]
+
+[features]
+test-fixtures = []
+
+[dependencies]
+aho-corasick = "1"
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+jsonschema = "0.18"
+reqwest = { version = "0.12", features = ["stream", "json"] }
+similar = "2"
+tera = "1"
+uuid = { version = "1", features = ["v4"] }
+anyhow = "1"
+thiserror = "1"
+toml = "0.8"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+async-trait = "0.1"
+futures-util = "0.3"
+
+[dev-dependencies]
+tokio-test = "0.4"
+assert_matches = "1"
+tempfile = "3"

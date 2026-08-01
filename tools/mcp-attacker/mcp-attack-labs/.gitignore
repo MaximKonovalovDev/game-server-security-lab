@@ -1,0 +1,26 @@
+# Node (any depth)
+**/node_modules/
+
+# Python (any depth)
+**/venv/
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+**/.Python
+
+# Environment
+**/.env
+
+# macOS
+.DS_Store
+
+# Editor
+.vscode/
+.idea/
+/.claude
+/labs/04-rag-security/chroma_db
+
+# Lab runtime artifacts (regenerated on each run; not source)
+**/whatsapp_stub.log
+**/venv/

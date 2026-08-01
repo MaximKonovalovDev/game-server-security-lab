@@ -1,0 +1,780 @@
+import asyncio
+import json
+import uuid
+import logging
+import os
+import shlex
+import subprocess
+import signal as _signal
+import sys
+import time
+from typing import Any, Callable, TYPE_CHECKING
+
+from ..interfaces.driver import TransportDriver
+from ...exceptions import (
+    ProcessSignalError,
+    ProcessStartError,
+    ServerCrashError,
+    ServerError,
+    TransportError,
+)
+from ...spec_guard.spec_version import maybe_update_spec_version_from_result
+from ..interfaces.server_requests import (
+    ServerRequestHandler,
+    ServerRequestHandlerProtocol,
+    is_server_request,
+)
+
+if TYPE_CHECKING:
+    from ...fuzz_engine.runtime import ProcessManager, WatchdogConfig
+else:
+    ProcessManager = Any
+    WatchdogConfig = Any
+from ...safety_system.policy import sanitize_subprocess_env
+from ...config import DEFAULT_PROTOCOL_VERSION, PROCESS_WAIT_TIMEOUT
+from ..controller.process_supervisor import ProcessSupervisor
+from ..methods import (
+    INITIALIZE,
+    NOTIFY_INITIALIZED,
+    is_initialize_method,
+    is_initialized_notification,
+    payload_method,
+    requires_mcp_initialization,
+)
+
+# Signals that indicate the server crashed itself (not our own SIGKILL/SIGTERM
+# used for cleanup/restart between runs).
+_CRASH_SIGNALS = {
+    getattr(_signal, name).value
+    for name in ("SIGSEGV", "SIGABRT", "SIGBUS", "SIGFPE", "SIGILL", "SIGSYS")
+    if hasattr(_signal, name)
+}
+
+
+class StdioDriver(TransportDriver):
+    def __init__(
+        self,
+        command: str,
+        timeout: float = 30.0,
+        process_manager: ProcessManager | None = None,
+        server_request_handler: ServerRequestHandlerProtocol | None = None,
+        server_request_handler_factory: Callable[
+            [], ServerRequestHandlerProtocol
+        ] | None = None,
+    ):
+        self.command = command
+        self.timeout = timeout
+        self.process = None
+        self.stdin = None
+        self.stdout = None
+        self.stderr = None
+        self._stderr_drain_task: asyncio.Task | None = None
+        # Bounded tail of the server's stderr, attached to crash findings so a
+        # panic trace / sanitizer (ASan) report travels with the report.
+        from collections import deque
+
+        self._stderr_tail: deque[str] = deque(maxlen=50)
+        self._lock = None  # Will be created lazily when needed
+        # Serializes a full request/response exchange so concurrent callers
+        # (e.g. bounded asyncio.gather fuzz runs) never read the single stdout
+        # stream at the same time ("readuntil() called while another coroutine
+        # is already waiting for incoming data").
+        self._io_lock = None
+        self._io_lock_loop = None
+        self._initialized = False
+        self._mcp_initialized = False
+        self._last_activity = time.time()
+        self.process_manager = process_manager
+        self.manager = ProcessSupervisor(logger=logging.getLogger(__name__))
+        if server_request_handler is not None:
+            self._server_request_handler = server_request_handler
+        elif server_request_handler_factory is not None:
+            self._server_request_handler = server_request_handler_factory()
+        else:
+            self._server_request_handler = ServerRequestHandler()
+
+    def _get_lock(self):
+        """Get or create the lock lazily."""
+        if self._lock is None:
+            self._lock = asyncio.Lock()
+        return self._lock
+
+    def _get_io_lock(self) -> asyncio.Lock:
+        """Get the request/response serialization lock for the running loop."""
+        loop = asyncio.get_running_loop()
+        if self._io_lock is None or self._io_lock_loop is not loop:
+            self._io_lock = asyncio.Lock()
+            self._io_lock_loop = loop
+        return self._io_lock
+
+    def add_observer(self, callback: Callable[[str, dict[str, Any]], None]) -> None:
+        """Register an observer for lifecycle events."""
+        self.manager.add_observer(callback)
+
+    def _get_process_manager(self):
+        """Get or create the process manager lazily."""
+        if self.process_manager is None:
+            from ...fuzz_engine.runtime import ProcessManager, WatchdogConfig
+            # Use our new Process Management system
+            watchdog_config = WatchdogConfig(
+                check_interval=1.0,
+                process_timeout=self.timeout,
+                extra_buffer=5.0,
+                max_hang_time=self.timeout + 10.0,
+                auto_kill=True,
+            )
+            self.process_manager = ProcessManager.from_config(watchdog_config)
+        return self.process_manager
+
+    async def _update_activity(self):
+        """Update last activity timestamp and notify process manager asynchronously."""
+        self._last_activity = time.time()
+        if self.process and hasattr(self.process, "pid"):
+            # Update activity in the process manager
+            await self._get_process_manager().update_activity(self.process.pid)
+
+    async def _ensure_connection(self):
+        """Ensure we have a persistent connection to the subprocess."""
+        # Fast-path: if already initialized and process is alive, avoid locking
+        proc = self.process
+        if self._initialized and proc is not None and proc.returncode is None:
+            return
+
+        async with self._get_lock():
+            if self._initialized and self.process and self.process.returncode is None:
+                return
+
+            is_restart = self._initialized
+
+            # Kill existing process if any
+            if self.process:
+                try:
+                    # Use process manager to stop the process
+                    if hasattr(self.process, "pid"):
+                        await self._get_process_manager().stop_process(
+                            self.process.pid, force=True
+                        )
+                    else:
+                        # Fallback to direct process termination
+                        if sys.platform == "win32":
+                            try:
+                                self.process.send_signal(_signal.CTRL_BREAK_EVENT)
+                            except (AttributeError, ValueError):
+                                self.process.kill()
+                        else:
+                            try:
+                                pgid = os.getpgid(self.process.pid)
+                                os.killpg(pgid, _signal.SIGKILL)
+                            except OSError:
+                                self.process.kill()
+                except Exception as e:
+                    logging.warning(f"Error stopping existing process: {e}")
+
+            if is_restart:
+                delay = await self.manager.apply_backoff()
+                self.manager.state.record_restart()
+                self.manager.emit_event(
+                    "restarting",
+                    attempt=self.manager.restart_attempts,
+                    backoff=delay,
+                    previous_pid=getattr(self.process, "pid", None),
+                )
+
+            # Start new process using asyncio subprocess for proper async communication
+            try:
+                # Parse command
+                if isinstance(self.command, str):
+                    cmd_parts = shlex.split(self.command)
+                else:
+                    cmd_parts = self.command
+
+                # Create async subprocess
+                self.process = await asyncio.create_subprocess_exec(
+                    *cmd_parts,
+                    stdin=asyncio.subprocess.PIPE,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                    env=sanitize_subprocess_env(),
+                    preexec_fn=os.setsid if sys.platform != "win32" else None,
+                    creationflags=(
+                        subprocess.CREATE_NEW_PROCESS_GROUP
+                        if sys.platform == "win32"
+                        else 0
+                    ),
+                )
+
+                # Set up communication
+                self.stdin = self.process.stdin
+                self.stdout = self.process.stdout
+                self.stderr = self.process.stderr
+                self._start_stderr_drain()
+
+                # Register with process manager for monitoring
+                if hasattr(self.process, "pid"):
+                    # Register with manager (ensures tracking + watchdog)
+                    await self._get_process_manager().register_existing_process(
+                        self.process.pid,
+                        self.process,
+                        "stdio_transport",
+                        self._get_activity_timestamp,
+                    )
+
+                # Scope the optional runtime probe to the server's process group.
+                try:
+                    from ...runtime_probe import PROBE
+
+                    if PROBE.enabled():
+                        PROBE.ensure_started()
+                        PROBE.set_scope(self.process.pid)
+                except Exception as exc:  # never let the probe break a run
+                    logging.warning("runtime probe scope hook failed: %s", exc)
+
+                self._initialized = True
+                self._mcp_initialized = False
+                await self._update_activity()
+                self.manager.state.record_start(self.process.pid)
+                self.manager.emit_event("started", pid=self.process.pid)
+                logging.info(
+                    f"Started stdio transport process with PID: {self.process.pid}"
+                )
+                self.manager.reset_backoff()
+
+            except Exception as e:
+                logging.error(f"Failed to start stdio transport process: {e}")
+                self._initialized = False
+                self.manager.state.record_error(str(e))
+                raise ProcessStartError(
+                    "Failed to start stdio transport process",
+                    context={"command": cmd_parts, "cwd": os.getcwd()},
+                ) from e
+
+    def _get_activity_timestamp(self) -> float:
+        """Callback for process manager to get last activity timestamp."""
+        return self._last_activity
+
+    def _start_stderr_drain(self) -> None:
+        if self.stderr is None:
+            return
+        if self._stderr_drain_task is not None and not self._stderr_drain_task.done():
+            return
+        self._stderr_drain_task = asyncio.create_task(self._drain_stderr())
+
+    async def _drain_stderr(self) -> None:
+        if self.stderr is None:
+            return
+        try:
+            while True:
+                line = await self.stderr.readline()
+                if not line:
+                    break
+                decoded = line.decode(errors="replace").rstrip()
+                if decoded:
+                    self._stderr_tail.append(decoded)
+                    logging.debug("stdio stderr: %s", decoded[-500:])
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logging.debug("stdio stderr drain stopped: %s", exc)
+
+    def sample_server_memory(self) -> int | None:
+        """Return the current RSS (bytes) of the server process, or None.
+
+        Used for memory-growth/leak detection on stdio targets. Safe to call
+        when psutil is unavailable or the process has exited.
+        """
+        proc = self.process
+        pid = getattr(proc, "pid", None)
+        if pid is None or getattr(proc, "returncode", None) is not None:
+            return None
+        try:
+            import psutil
+
+            return int(psutil.Process(pid).memory_info().rss)
+        except Exception:
+            return None
+
+    async def _detect_crash(self) -> dict[str, Any] | None:
+        """Return crash context if the server process died abnormally.
+
+        Distinguishes a genuine server crash (a crash signal or a positive
+        non-zero exit) from our own SIGKILL/SIGTERM used to recycle processes.
+        Returns ``None`` while the process is still running or exited cleanly.
+        """
+        proc = self.process
+        if proc is None:
+            return None
+        if proc.returncode is None:
+            # stdout EOF can precede reaping; give the process a moment to exit.
+            try:
+                await asyncio.wait_for(proc.wait(), timeout=0.5)
+            except (asyncio.TimeoutError, Exception):
+                return None
+        rc = proc.returncode
+        if rc is None or rc == 0:
+            return None
+        if rc < 0 and (-rc) not in _CRASH_SIGNALS:
+            # Negative code from our own SIGKILL/SIGTERM, not a server crash.
+            return None
+        context: dict[str, Any] = {"exit_code": rc}
+        if rc < 0:
+            context["signal"] = -rc
+            try:
+                context["signal_name"] = _signal.Signals(-rc).name
+            except ValueError:
+                pass
+        if self._stderr_tail:
+            context["stderr_tail"] = list(self._stderr_tail)
+        return context
+
+    async def _raise_if_crashed(self, cause: BaseException | None = None) -> None:
+        """Raise ServerCrashError if the server process terminated abnormally."""
+        context = await self._detect_crash()
+        if context is not None:
+            self._initialized = False
+            raise ServerCrashError(
+                "Server process terminated abnormally during a request",
+                context=context,
+            ) from cause
+
+    async def _send_message(self, message: dict[str, Any]) -> None:
+        """Send a message to the subprocess."""
+        if not self._initialized:
+            await self._ensure_connection()
+
+        try:
+            message_str = json.dumps(message) + "\n"
+            self.stdin.write(message_str.encode())
+            await self.stdin.drain()
+            await self._update_activity()
+        except Exception as e:
+            logging.error(f"Failed to send message to stdio transport: {e}")
+            self._initialized = False
+            self.manager.state.record_error(str(e))
+            await self._raise_if_crashed(e)
+            raise TransportError(
+                "Failed to send message over stdio transport",
+                context={"message": message},
+            ) from e
+
+    async def _handle_server_request(self, message: Any) -> bool:
+        """Handle server->client requests while waiting for a response."""
+        if not isinstance(message, dict):
+            return False
+        if is_server_request(message):
+            response = self._server_request_handler.handle_request(message)
+            if response is not None:
+                await self._send_message(response)
+                return True
+            return False
+        return self._server_request_handler.handle_notification(message)
+
+    async def _readline_with_cap(self) -> bytes | None:
+        """Read a single line from stdout, capping size to avoid limit overruns."""
+        if not self.stdout:
+            return None
+
+        return await self.manager.read_with_cap(self.stdout, timeout=self.timeout)
+
+    async def _receive_message(self) -> dict[str, Any | None]:
+        """Receive a message from the subprocess."""
+        if not self._initialized:
+            await self._ensure_connection()
+
+        try:
+            for _ in range(100):
+                line = await self._readline_with_cap()
+                if not line:
+                    return None
+
+                await self._update_activity()
+                decoded = line.decode().strip()
+                if not decoded:
+                    continue
+                if not decoded.startswith("{"):
+                    logging.debug("Skipping non-JSON stdio line: %s", decoded[:200])
+                    self.manager.state.record_stdout_tail(decoded[-200:])
+                    continue
+
+                self.manager.state.record_stdout_tail(decoded[-200:])
+                message = json.loads(decoded)
+                return message
+            raise TransportError(
+                "Failed to receive message from stdio transport",
+                context={
+                    "command": self.command,
+                    "detail": "Too many consecutive non-JSON stdout lines",
+                },
+            )
+        except ServerCrashError:
+            raise
+        except json.JSONDecodeError as e:
+            logging.error("Failed to receive message from stdio transport: %s", e)
+            self._initialized = False
+            self.manager.state.record_error(str(e))
+            await self._raise_if_crashed(e)
+            raise TransportError(
+                "Failed to receive message from stdio transport",
+                context={"command": self.command, "detail": str(e)},
+            ) from e
+        except Exception as e:
+            logging.error(f"Failed to receive message from stdio transport: {e}")
+            self._initialized = False
+            self.manager.state.record_error(str(e))
+            await self._raise_if_crashed(e)
+            raise TransportError(
+                "Failed to receive message from stdio transport",
+                context={"command": self.command},
+            ) from e
+
+    async def send_request(
+        self, method: str, params: dict[str, Any | None] | None = None
+    ) -> Any:
+        """Send a request and wait for response."""
+        if not is_initialize_method(method) and not self._mcp_initialized:
+            await self._do_initialize()
+
+        request_id = str(uuid.uuid4())
+        message = {
+            "jsonrpc": "2.0",
+            "id": request_id,
+            "method": method,
+            "params": params or {},
+        }
+
+        # Serialize the full send+receive exchange: stdio has a single stdout,
+        # so two concurrent receive loops would collide on readuntil().
+        async with self._get_io_lock():
+            await self._send_message(message)
+
+            # Wait for response
+            # Safety: limit iterations to prevent infinite loops
+            max_iterations = 1000
+            iteration_count = 0
+            while iteration_count < max_iterations:
+                iteration_count += 1
+                response = await self._receive_message()
+                if response is None:
+                    await self._raise_if_crashed()
+                    raise TransportError(
+                        "No response received from stdio transport",
+                        context={"request_id": request_id},
+                    )
+
+                if await self._handle_server_request(response):
+                    continue
+
+                if response.get("id") == request_id:
+                    if "error" in response:
+                        logging.error(f"Server returned error: {response['error']}")
+                        raise ServerError(
+                            "Server returned error",
+                            context={
+                                "request_id": request_id,
+                                "error": response["error"],
+                            },
+                        )
+                    result = response.get("result", response)
+                    if is_initialize_method(method):
+                        maybe_update_spec_version_from_result(result)
+                        self._mcp_initialized = True
+                    return result if isinstance(result, dict) else {"result": result}
+
+            # If we've exhausted iterations, raise an error
+            raise TransportError(
+                "Too many responses received without matching request ID",
+                context={"request_id": request_id, "iterations": iteration_count},
+            )
+
+    async def send_raw(self, payload: dict[str, Any]) -> Any:
+        """Send raw payload and wait for response."""
+        method = payload_method(payload)
+        if requires_mcp_initialization(method) and not self._mcp_initialized:
+            await self._do_initialize()
+
+        async with self._get_io_lock():
+            await self._send_message(payload)
+
+            # Wait for response
+            max_iterations = 1000
+            iteration_count = 0
+            while iteration_count < max_iterations:
+                iteration_count += 1
+                response = await self._receive_message()
+                if response is None:
+                    await self._raise_if_crashed()
+                    raise TransportError(
+                        "No response received from stdio transport",
+                        context={"payload": payload},
+                    )
+
+                if await self._handle_server_request(response):
+                    continue
+
+                if "error" in response:
+                    logging.error(f"Server returned error: {response['error']}")
+                    raise ServerError(
+                        "Server returned error",
+                        context={"error": response["error"]},
+                    )
+
+                result = response.get("result", response)
+                if is_initialize_method(method):
+                    maybe_update_spec_version_from_result(result)
+                    self._mcp_initialized = True
+                return result if isinstance(result, dict) else {"result": result}
+
+            raise TransportError(
+                "Too many responses received without matching request",
+                context={"payload": payload, "iterations": iteration_count},
+            )
+
+    async def send_notification(
+        self, method: str, params: dict[str, Any | None] | None = None
+    ) -> None:
+        """Send a notification (no response expected)."""
+        message = {
+            "jsonrpc": "2.0",
+            "method": method,
+            "params": params or {},
+        }
+        # Serialize the write against in-flight request/response exchanges so a
+        # notification cannot interleave bytes on stdin.
+        async with self._get_io_lock():
+            await self._send_message(message)
+        if is_initialized_notification(method):
+            self._mcp_initialized = True
+
+    async def _do_initialize(self) -> None:
+        """Perform MCP initialize plus initialized notification for stdio servers."""
+        if self._mcp_initialized:
+            return
+
+        await self.send_request(
+            INITIALIZE,
+            {
+                "protocolVersion": DEFAULT_PROTOCOL_VERSION,
+                "capabilities": {
+                    "experimental": {},
+                    "roots": {"listChanged": True},
+                    "sampling": {},
+                },
+                "clientInfo": {"name": "mcp-fuzzer", "version": "0.1"},
+            },
+        )
+        await self.send_notification(NOTIFY_INITIALIZED, {})
+
+    async def _stream_request(self, payload: dict[str, Any]):
+        """Stream responses from the subprocess for a single JSON-RPC request."""
+        message = dict(payload)
+        message.setdefault("jsonrpc", "2.0")
+        if "id" not in message and "method" in message:
+            message["id"] = str(uuid.uuid4())
+
+        await self._send_message(message)
+
+        max_iterations = 1000
+        iteration_count = 0
+        while iteration_count < max_iterations:
+            iteration_count += 1
+            response = await self._receive_message()
+            if response is None:
+                return
+
+            if await self._handle_server_request(response):
+                continue
+
+            yield response
+
+        raise TransportError(
+            "Too many responses received while streaming request",
+            context={"payload": payload, "iterations": iteration_count},
+        )
+
+    async def close(self):
+        """Close the transport and cleanup resources."""
+        try:
+            if self.process and hasattr(self.process, "pid"):
+                # Ensure manager knows about it (in case of earlier failures)
+                if not await self._get_process_manager().is_process_registered(
+                    self.process.pid
+                ):
+                    await self._get_process_manager().register_existing_process(
+                        self.process.pid,
+                        self.process,
+                        "stdio_transport",
+                        self._get_activity_timestamp,
+                    )
+                # Use process manager to stop the process
+                await self._get_process_manager().stop_process(
+                    self.process.pid, force=True
+                )
+                # Reap the child to avoid zombies
+                try:
+                    await asyncio.wait_for(
+                        self.process.wait(), timeout=PROCESS_WAIT_TIMEOUT
+                    )
+                except Exception:
+                    pass
+            elif self.process:
+                # Fallback to direct process termination
+                if sys.platform == "win32":
+                    try:
+                        self.process.send_signal(_signal.CTRL_BREAK_EVENT)
+                    except (AttributeError, ValueError):
+                        self.process.kill()
+                else:
+                    try:
+                        pgid = os.getpgid(self.process.pid)
+                        os.killpg(pgid, _signal.SIGKILL)
+                    except OSError:
+                        self.process.kill()
+        except Exception as e:
+            logging.warning(f"Error stopping stdio transport process: {e}")
+        finally:
+            if self._stderr_drain_task is not None:
+                self._stderr_drain_task.cancel()
+                try:
+                    await self._stderr_drain_task
+                except asyncio.CancelledError:
+                    pass
+                except Exception:
+                    pass
+                self._stderr_drain_task = None
+            self._initialized = False
+            self.process = None
+            self.stdin = None
+            self.stdout = None
+            self.stderr = None
+            self.manager.state.record_exit()
+            self.manager.emit_event("stopped", pid=None)
+
+    async def get_process_stats(self) -> dict[str, Any]:
+        """Get statistics about the managed process."""
+        return await self._get_process_manager().get_stats()
+
+    async def send_timeout_signal(self, signal_type: str = "timeout") -> bool:
+        """Send a timeout signal to the transport process."""
+        if self.process and hasattr(self.process, "pid"):
+            # Check if process is registered with watchdog
+            registered = await self._get_process_manager().is_process_registered(
+                self.process.pid
+            )
+            if registered:
+                self.manager.state.record_signal(signal_type)
+                self.manager.emit_event(
+                    "signal",
+                    pid=self.process.pid,
+                    signal=signal_type,
+                    via="manager",
+                )
+                return await self._get_process_manager().send_timeout_signal(
+                    self.process.pid, signal_type
+                )
+            else:
+                # Process is not in managed list, send signal directly
+                try:
+                    if signal_type == "timeout":
+                        # Send SIGTERM (graceful termination)
+                        if os.name != "nt":
+                            try:
+                                pgid = os.getpgid(self.process.pid)
+                                os.killpg(pgid, _signal.SIGTERM)
+                                logging.info(
+                                    (
+                                        "Sent SIGTERM timeout signal to process "
+                                        f"{self.process.pid}"
+                                    )
+                                )
+                            except OSError:
+                                self.process.terminate()
+                                logging.info(
+                                    (
+                                        "Sent terminate timeout signal to process "
+                                        f"{self.process.pid}"
+                                    )
+                                )
+                        else:
+                            self.process.terminate()
+                            logging.info(
+                                (
+                                    "Sent terminate timeout signal to process "
+                                    f"{self.process.pid}"
+                                )
+                            )
+                    elif signal_type == "force":
+                        # Send SIGKILL (force kill)
+                        if os.name != "nt":
+                            try:
+                                pgid = os.getpgid(self.process.pid)
+                                os.killpg(pgid, _signal.SIGKILL)
+                                logging.info(
+                                    (
+                                        "Sent SIGKILL force signal to process "
+                                        f"{self.process.pid}"
+                                    )
+                                )
+                            except OSError:
+                                self.process.kill()
+                                logging.info(
+                                    (
+                                        "Sent kill force signal to process "
+                                        f"{self.process.pid}"
+                                    )
+                                )
+                        else:
+                            self.process.kill()
+                            logging.info(
+                                f"Sent kill force signal to process {self.process.pid}"
+                            )
+                    elif signal_type == "interrupt":
+                        # Send SIGINT (interrupt)
+                        if os.name != "nt":
+                            try:
+                                pgid = os.getpgid(self.process.pid)
+                                os.killpg(pgid, _signal.SIGINT)
+                                logging.info(
+                                    (
+                                        "Sent SIGINT interrupt signal to process "
+                                        f"{self.process.pid}"
+                                    )
+                                )
+                            except OSError:
+                                self.process.terminate()
+                                logging.info(
+                                    (
+                                        "Sent terminate interrupt signal to process "
+                                        f"{self.process.pid}"
+                                    )
+                                )
+                        else:
+                            self.process.terminate()
+                            logging.info(
+                                (
+                                    "Sent terminate interrupt signal to process "
+                                    f"{self.process.pid}"
+                                )
+                            )
+                    else:
+                        logging.warning(f"Unknown signal type: {signal_type}")
+                        return False
+
+                    self.manager.state.record_signal(signal_type)
+                    self.manager.emit_event(
+                        "signal", pid=self.process.pid, signal=signal_type, via="direct"
+                    )
+                    return True
+
+                except Exception as e:
+                    logging.error(
+                        (
+                            f"Failed to send {signal_type} signal to process "
+                            f"{self.process.pid}: {e}"
+                        )
+                    )
+                    raise ProcessSignalError(
+                        f"Failed to send {signal_type} signal to stdio transport",
+                        context={"pid": self.process.pid, "signal_type": signal_type},
+                    ) from e
+        return False
+
+    # Avoid destructors for async cleanup; use close()

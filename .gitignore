@@ -21,3 +21,7 @@ tools/portwarp/
 
 # Vendored reference repos (re-cloneable, see ARSENAL.md PART D)
 tools/reference/
+
+# Vendored attack kits - build artifacts
+tools/mcp-attacker/fuzzd/target/
+tools/mcp-attacker/fuzz-mcp-results.db*

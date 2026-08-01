@@ -1,0 +1,153 @@
+name: E2E Test with Safety
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      test_mode:
+        description: 'Test mode (tools/protocol/both)'
+        required: false
+        default: 'tools'
+        type: choice
+        options:
+        - tools
+        - protocol
+        - both
+      runs_per_tool:
+        description: 'Runs per tool'
+        required: false
+        default: '3'
+        type: string
+
+jobs:
+  e2e-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        submodules: recursive
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.24.x'
+
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e .
+        pip install "mcp[cli]" uvicorn
+
+
+    - name: Create test output directory
+      run: mkdir -p test-results
+
+    - name: Run safety check
+      run: |
+        echo "🔒 Running pre-flight safety check..."
+        chmod +x tests/e2e/check_safety.sh
+        ./tests/e2e/check_safety.sh
+
+    - name: Run e2e test with safety system
+      env:
+        TEST_MODE: ${{ github.event.inputs.test_mode || 'tools' }}
+        RUNS_PER_TOOL: ${{ github.event.inputs.runs_per_tool || '3' }}
+        MCP_FUZZER_TIMEOUT: '30'
+        MCP_FUZZER_SAFETY_ENABLED: 'true'
+        MCP_FUZZER_FS_ROOT: '/tmp/mcp_fuzzer_sandbox'
+      run: |
+        echo "🧪 Running e2e test with safety system enabled"
+        echo "Test Mode: $TEST_MODE"
+        echo "Runs per tool: $RUNS_PER_TOOL"
+        echo "Working Directory: $(pwd)"
+
+        # Create sandbox directory
+        mkdir -p /tmp/mcp_fuzzer_sandbox
+
+        # Verify Python and Node.js are available
+        python --version
+        node --version
+
+        # Run the everything server e2e test
+        chmod +x tests/e2e/test_everything_server.sh
+        ./tests/e2e/test_everything_server.sh
+
+    - name: Run auth e2e test
+      env:
+        MCP_FUZZER_TIMEOUT: '30'
+        MCP_FUZZER_SAFETY_ENABLED: 'true'
+        MCP_FUZZER_FS_ROOT: '/tmp/mcp_fuzzer_sandbox'
+      run: |
+        echo "Running auth e2e test"
+        mkdir -p /tmp/mcp_fuzzer_sandbox
+        chmod +x tests/e2e/test_auth_server.sh
+        ./tests/e2e/test_auth_server.sh
+
+    - name: Run official SDK stdio server e2e test
+      env:
+        MCP_FUZZER_TIMEOUT: '30'
+        MCP_FUZZER_SAFETY_ENABLED: 'true'
+        MCP_FUZZER_FS_ROOT: '/tmp/mcp_fuzzer_sandbox'
+      run: |
+        echo "Running official Go and TypeScript SDK stdio server e2e test"
+        mkdir -p /tmp/mcp_fuzzer_sandbox
+        chmod +x tests/e2e/test_official_sdk_stdio_servers.sh
+        ./tests/e2e/test_official_sdk_stdio_servers.sh
+
+    - name: Ensure workspace exists
+      if: always()
+      working-directory: /
+      run: |
+        mkdir -p "$GITHUB_WORKSPACE"
+
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: e2e-test-results-${{ github.run_id }}
+        path: |
+          reports/
+          test-results/
+        retention-days: 30
+
+    - name: Generate test summary
+      if: always()
+      run: |
+        echo "## 🧪 E2E Test Results" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+
+        if [ -d "reports" ]; then
+          echo "### 📊 Test Reports Generated" >> $GITHUB_STEP_SUMMARY
+          find reports -name "*.json" -exec basename {} \; | head -5 >> $GITHUB_STEP_SUMMARY
+        fi
+
+        if [ -f "reports/sessions/*/fuzzing_results.json" ]; then
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📈 Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "Fuzzing results generated successfully" >> $GITHUB_STEP_SUMMARY
+          echo "Results location: \`reports/\`" >> $GITHUB_STEP_SUMMARY
+        fi
+
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 🔒 Security Status" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Safety system enabled" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Command blocking active" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Filesystem sandboxing" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Process isolation" >> $GITHUB_STEP_SUMMARY

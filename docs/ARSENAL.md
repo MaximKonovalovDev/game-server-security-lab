@@ -330,3 +330,40 @@ Full spec: `docs/SECURITYPACK-PLUGIN.md` — grounded in a 3-pass repo audit of 
 7. `[use]` Diff cgutman/wireshark-enet-dissector vs `flax_enet.lua` — absorb ENet-core command coverage.
 8. `[use]` Cross-check WIRE-FORMAT.md + boofuzz defs against lsalzman/enet source.
 9. `[use]` Build rogue-client codec on ENet-CSharp patterns.
+
+---
+
+## PART N - MCP attack lab (defense-reversal)
+
+Full spec: docs/MCP-ATTACK-LAB.md - attack the MCP plugin (the product-to-be-sold) like the game server: 5 positions (external / same-machine / AI assistant / malicious project content / thief), grounded surface map (8765/mcp HttpListener, OpenAPI, :9100 metrics, TokenValidator FLAXMCP_TOKEN fail-closed, OriginValidator, Policy gates, ProviderUrlGuard), tooling (tools/mcp-attacker: mcp_attack.py modes + fuzz_mcp.py + injection-corpus.json + scripts/mcp-attack-run.ps1), test matrix M-01..M-44 (auth, transport, tool dispatch, supply chain), findings format, honest limits (loopback-only, editor-only, env-leak is operational not code).
+
+## PART O - MCP attack arsenal (research round 2, verified 2026-08-01)
+
+Research round 2 folds aggressive GitHub tools + the OWASP MCP Top 10 into the attack lab (full mapping: docs/MCP-ATTACK-LAB.md §8). Verified: OWASP MCP Top 10 (owasp.org/www-project-mcp-top-10, nest.owasp.org/projects/mcp-top-10) — named items: agentic misbinding + context spoofing; Agent-Hellboy/mcp-server-fuzzer (MIT, 33★/319 commits, async, built-in safety system, Docker) → automated tool-arg + protocol-type fuzzing for M-12..M-16/M-30; aminrj-labs/mcp-attack-labs (2026-02-26, 16★) → recipes (tool poisoning → silent file exfiltration, DockerDash, RAG injection, agentic memory exploitation) → injection-corpus.json; GT-Projects256/mcpguard (MIT, 7★) → OWASP-mapped scanner = hardening cross-ref for MCP-SECURITY; adudley78/mcp-audit (Apache 2.0, mcp-audit.dev) → offline config scan for supply-chain group M-40..M-44; cinder-security/ai-red-team-toolkit "Fracture" (MIT, 2★) → autonomous Position-C campaigns for M-37/M-38 (deferred); articles: practical-devsecops.com/mcp-security-vulnerabilities (2026-01-04), guardrly.com/blog/mcp-injection-attacks-defense-guide (2026-05-18). Next: vendor mcp-server-fuzzer into tools/mcp-attacker/, then build mcp_attack.py + corpus (order-of-work step 1-2).
+
+## PART P - operations center + research round 3 (verified 2026-08-01)
+
+The repo became an operations center (docs/OPERATIONS.md): two attack flows with runbooks (PLAYBOOK-GAME.md, PLAYBOOK-MCP.md), tricks database (TRICKS.md), self-learning loop (SELF-LEARN.md + tools/self-learn/harvest.py), build guides (BUILD-GAME-SERVER.md, BUILD-MCP-PLUGIN.md). Research round 3 verified: RejiDev/game-hacking-guidelines (packet-RE workflow: field-type heuristics, challenge-response auth, movement input-vs-position models — used as our test generator), Fox-IT game security (3 cheat classes: network manipulation/function hooking/memory manipulation; authoritative-server argument), dsasmblr/game-hacking (5543★, Unlicense, ultimate RE resource index), mcp-fuzzer findings taxonomy (crash/auth_bypass/injection_reflection/oversized_response/hang/internal_error/error_leakage/memory_growth/non_determinism/accepted_malformed/performance_outlier — maps onto M-matrix), zfuzz MCP config audit (23 detection patterns, 14% of 200 configs vulnerable; base64 metadata pattern), MCPTox benchmark (arxiv 2508.14925: tool poisoning needs trigger+action+justification; <3% refusal rates — corpus design principle), invariantlabs tool-poisoning disclosure, Trail of Bits "jumping the line", Teycir/Mcpwn scanner (vendored), gensecaihq/mcp-poisoning-poc (vendored), KryptosAI/mcp-observatory + Coff0xc/AutoRedTeam-Orchestrator + adithyan-ak/AgentHound (reference). Live result: FINDINGS-MCP-001 — running plugin answers tools/list + tools/call with NO auth (200); origin spoofing passes (403); /openapi.json → 500.
+
+## PART Q - ready kits with CODE (round 4, verified 2026-08-01) — no docs, all runnable
+
+User directive: stop gathering docs, vendor working code. All vendored into the lab (`tools/`), licenses checked (MIT/Apache unless noted).
+
+| Kit | What it is | Status in lab |
+|---|---|---|
+| `aminrj-labs/mcp-attack-labs` | attack lab CODE: `attack1_direct_poison.py`, `exfil_server.py`, DockerDash, RAG, agentic memory, A2A kill chain (mirrors invariantlabs PoCs in reference/) | cloned `tools/mcp-attacker/mcp-attack-labs` |
+| `pestafford/mcp-fuzzer` | 138 payloads / 14 categories + `debug_vulnerable_server.py` | cloned + `pip install -e` (importable) |
+| `ksek87/fuzzd` (Rust) | chained/stateful adversarial tester + TPA corpora (rug_pull/tool_poisoning/tool_shadowing) | cloned + **built** — `target/release/fuzzd.exe` (audit/scan/corpus commands verified) |
+| `0xSteph/pentest-ai` | offensive MCP server, 205 wrapped tools (MIT) | cloned `tools/mcp-attacker/pentest-ai` (needs its pip reqs) |
+| `invariantlabs-ai/mcp-injection-experiments` | tool-poisoning PoC snippets | cloned — **NO LICENSE: study-only**; legal mirror under mcp-attack-labs/01/reference |
+| `aoh/radamsa` | mutation fuzzer (C) | cloned `tools/radamsa`; no Windows binary + no gcc here — use boofuzz mutations meanwhile |
+| `networkprotocol/netcode.io` | game netcode w/ crypto + its own `fuzz/` dir | cloned `tools/netcode-io` — protocol + fuzzer reference for BUILD-GAME-SERVER |
+| NVIDIA `garak` | LLM vuln scanner | **installed 0.15.1** (mcp-attacker venv) |
+| `protectai/rebuff` | prompt-injection detector | **installed** |
+| `scapy` | packet craft/sniff | **installed 2.7.0** (game packet crafting) |
+| Microsoft `PyRIT` | AI red-team framework | not installed (heavy deps); `pip install pyrit` on demand |
+| `promptfoo` | LLM red-team harness (npm, now OpenAI) | on demand: `npx promptfoo redteam run` when LLM wiring exists |
+| `snyk/agent-scan` (2.8k★) | agent/MCP config scanner | on demand: `uvx snyk-agent-scan@latest` |
+| `Tencent/AI-Infra-Guard` (4.3k★) | full AI red-team platform incl. MCP scan | reference only |
+
+Corpora now in-repo: fuzzd `corpus/` (TPA JSON), mcp-fuzzer-payloads (138), our `injection-corpus.json` (C01-C15).

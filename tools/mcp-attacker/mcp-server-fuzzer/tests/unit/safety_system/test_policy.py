@@ -1,0 +1,136 @@
+#!/usr/bin/env python3
+import os
+import pytest
+
+from mcp_fuzzer.safety_system.policy import (
+    _normalize_host,
+    is_host_allowed,
+    resolve_redirect_safely,
+    sanitize_subprocess_env,
+    sanitize_headers,
+    configure_network_policy,
+)
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("https://Example.COM/path", "example.com"),
+        ("http://Example.COM/path", "example.com"),
+        ("EXAMPLE.com", "example.com"),
+        ("example.com:443", "example.com"),
+        ("::1", "::1"),
+        ("[2001:db8::1]:8443", "2001:db8::1"),
+        ("[::1", "::1"),
+        ("localhost.", "localhost"),
+        ("  localhost  ", "localhost"),
+        ("", ""),
+        ("   ", ""),
+        (None, ""),
+    ],
+)
+def test_normalize_host_variants(value, expected):
+    assert _normalize_host(value) == expected
+
+
+def test_is_host_allowed_defaults():
+    # With default config SAFETY_NO_NETWORK_DEFAULT=False, all hosts allowed
+    assert is_host_allowed("http://example.com") is True
+    assert is_host_allowed("http://localhost") is True
+
+
+def test_is_host_allowed_strict_mode_local_only():
+    assert is_host_allowed("http://example.com", deny_network_by_default=True) is False
+    assert is_host_allowed("http://localhost", deny_network_by_default=True) is True
+
+
+def test_is_host_allowed_trailing_dot_variants():
+    assert is_host_allowed(
+        "http://localhost.",
+        allowed_hosts=["localhost"],
+        deny_network_by_default=True,
+    )
+    assert is_host_allowed(
+        "http://localhost",
+        allowed_hosts=["localhost."],
+        deny_network_by_default=True,
+    )
+
+
+def test_is_host_allowed_bare_ipv6_loopback():
+    assert is_host_allowed(
+        "::1",
+        allowed_hosts=["::1"],
+        deny_network_by_default=True,
+    )
+
+
+def test_resolve_redirect_safely_same_origin():
+    base = "http://localhost:8000/a"
+    # relative path
+    assert (
+        resolve_redirect_safely(base, "/b", deny_network_by_default=True)
+        == "http://localhost:8000/b"
+    )
+    # cross-origin refused when network is locked down
+    assert (
+        resolve_redirect_safely(
+            base, "http://example.com/x", deny_network_by_default=True
+        )
+        is None
+    )
+
+
+def test_resolve_redirect_safely_cross_origin_when_network_allowed():
+    base = "https://sh.inference.ac"
+    target = "https://api.inference.sh/mcp"
+    assert (
+        resolve_redirect_safely(base, target, deny_network_by_default=False) == target
+    )
+
+
+def test_resolve_redirect_safely_cross_origin_to_allowed_host():
+    configure_network_policy(
+        reset_allowed_hosts=True,
+        extra_allowed_hosts=["sh.inference.ac", "api.inference.sh"],
+    )
+    try:
+        base = "https://sh.inference.ac"
+        target = "https://api.inference.sh/mcp"
+        assert (
+            resolve_redirect_safely(base, target, deny_network_by_default=True)
+            == target
+        )
+    finally:
+        # Reset the global policy even if the assertion fails, to avoid
+        # leaking allowed hosts into other tests.
+        configure_network_policy(reset_allowed_hosts=True)
+
+
+def test_sanitize_subprocess_env_strips_proxies(monkeypatch):
+    monkeypatch.setenv("HTTP_PROXY", "http://proxy")
+    monkeypatch.setenv("NO_PROXY", "*")
+    env = sanitize_subprocess_env(os.environ)
+    assert "HTTP_PROXY" not in env
+    assert "NO_PROXY" not in env
+
+
+def test_sanitize_headers_drops_auth():
+    cleaned = sanitize_headers({"Authorization": "x", "X-Test": "y"})
+    assert "Authorization" not in cleaned
+    assert cleaned["X-Test"] == "y"
+
+
+def test_configure_network_policy_reset_hosts():
+    # Add a host to allowed list
+    configure_network_policy(extra_allowed_hosts=["example.com"])
+
+    # Check that host is allowed when deny_network=True
+    url = "http://example.com"
+    assert is_host_allowed(url, deny_network_by_default=True) is True
+
+    # Reset the allowed hosts list
+    configure_network_policy(reset_allowed_hosts=True)
+
+    # Check that host is no longer allowed
+    assert is_host_allowed(url, deny_network_by_default=True) is False

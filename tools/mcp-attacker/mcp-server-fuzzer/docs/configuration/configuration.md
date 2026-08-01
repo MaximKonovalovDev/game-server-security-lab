@@ -1,0 +1,280 @@
+# Configuration Guide
+
+This guide covers how to configure MCP Server Fuzzer using YAML config files, environment variables, and CLI arguments.
+
+## Configuration Methods
+
+MCP Server Fuzzer supports multiple configuration methods in order of precedence:
+
+1. **Command-line arguments** (highest precedence)
+2. **Configuration files** (YAML)
+3. **Environment variables** (lowest precedence)
+
+Use config files when you want repeatable runs or want to avoid long CLI invocations.
+
+## Configuration Files
+
+### YAML Configuration
+
+Create a `mcp-fuzzer.yaml` or `mcp-fuzzer.yml` file:
+
+```yaml
+# Core fuzzing settings
+# mode: Fuzzing target
+#   - tools: Fuzz tool calls and arguments
+#   - protocol: Fuzz protocol message shapes
+#   - resources: Run deterministic resource spec checks
+#   - prompts: Run deterministic prompt spec checks
+#   - all: Run tools + protocol fuzzing with spec checks
+mode: tools
+phase: aggressive
+# protocol_phase applies to protocol/resources/prompts/stateful fuzzing
+protocol_phase: realistic
+protocol: http
+endpoint: "http://localhost:8000/mcp/"
+runs: 10
+runs_per_type: 5
+# protocol_type: Protocol message schema to fuzz in protocol mode.
+# See EXECUTABLE_PROTOCOL_TYPES in
+# mcp_fuzzer/protocol_registry.py for the canonical list.
+protocol_type: "InitializeRequest"
+
+# Stateful + corpus controls
+stateful: false
+stateful_runs: 5
+corpus_enabled: true
+havoc_mode: false
+
+# Spec guard configuration
+# spec_guard: Enable deterministic MCP spec checks for protocol/resources/prompts
+# spec_resource_uri: Resource URI used for resources checks (file:// or http(s)://)
+# spec_prompt_name: Prompt name used for prompts/completions checks
+# spec_prompt_args: JSON object string of prompt arguments
+spec_guard: true
+spec_resource_uri: "file:///tmp/resource.txt"
+spec_prompt_name: "example_prompt"
+spec_prompt_args: '{"name":"value"}'
+# Optional: override MCP schema version used in initialize/spec guard
+spec_schema_version: "2025-11-25"
+
+# Timeouts and logging
+timeout: 30.0
+tool_timeout: 10.0
+log_level: "INFO"
+
+# Transport retry policy (optional)
+# transport_retries: Total attempts for transport requests (1 disables retries)
+# transport_retry_delay: Base delay between retries (seconds)
+# transport_retry_backoff: Backoff multiplier
+# transport_retry_max_delay: Maximum delay between retries (seconds)
+# transport_retry_jitter: Jitter factor for retry delay
+transport_retries: 1
+transport_retry_delay: 0.5
+transport_retry_backoff: 2.0
+transport_retry_max_delay: 5.0
+transport_retry_jitter: 0.1
+
+# Safety and filesystem constraints
+safety_enabled: true
+enable_safety_system: false
+fs_root: "~/.mcp_fuzzer"
+
+# Network restrictions
+no_network: false
+allow_hosts:
+  - "localhost"
+  - "127.0.0.1"
+
+# Runtime and watchdog settings
+max_concurrency: 5
+process_max_concurrency: 5
+process_retry_count: 1
+process_retry_delay: 1.0
+watchdog_check_interval: 1.0
+watchdog_process_timeout: 30.0
+watchdog_extra_buffer: 5.0
+watchdog_max_hang_time: 60.0
+
+# Reporting
+output:
+  directory: "reports"
+  format: "json"
+  types:
+    - "fuzzing_results"
+    - "safety_summary"
+  compress: false
+```
+
+### Using Configuration Files
+
+```bash
+# Use default config discovery
+mcp-fuzzer
+
+# Use an explicit config file
+mcp-fuzzer --config /path/to/config.yaml
+```
+
+## Protocol Type Values
+
+Use `protocol_type` in `mode: protocol` to select a specific MCP message schema
+to fuzz (for example, when you want to simulate a single request/notification
+shape rather than full protocol behavior). The canonical list lives in
+`mcp_fuzzer/protocol_registry.py` under `EXECUTABLE_PROTOCOL_TYPES`.
+
+Accepted values (requests/notifications sent by the client):
+
+- `InitializeRequest`: Client initialization request.
+- `InitializedNotification`: Initialization complete notification.
+- `ListToolsRequest`: List available tools request.
+- `CallToolRequest`: Call a tool request.
+- `ListResourcesRequest`: List available resources request.
+- `ReadResourceRequest`: Read a resource by URI request.
+- `ListPromptsRequest`: List available prompts request.
+- `GetPromptRequest`: Get a prompt by name request.
+- `ListRootsRequest`: List roots request.
+- `SetLevelRequest`: Set server logging level request.
+- `CompleteRequest`: Completion request.
+- `ListResourceTemplatesRequest`: List resource templates request.
+- `ElicitRequest`: Elicitation request.
+- `PingRequest`: Ping request.
+- `SubscribeRequest`: Subscribe to resource updates request.
+- `UnsubscribeRequest`: Unsubscribe from resource updates request.
+- `CreateMessageRequest`: Sampling create message request.
+- `ListTasksRequest`: List tasks request.
+- `GetTaskRequest`: Get task request.
+- `GetTaskPayloadRequest`: Get task payload request.
+- `CancelTaskRequest`: Cancel task request.
+- `ProgressNotification`: Progress notification message.
+- `CancelledNotification`: Cancellation notification message.
+- `GenericJSONRPCRequest`: Arbitrary JSON-RPC method payload.
+
+Result schemas are validated via spec guard but are not valid `protocol_type`
+values.
+
+## Environment Variables
+
+The following environment variables are currently read at startup:
+
+- `MCP_FUZZER_TIMEOUT`
+- `MCP_FUZZER_LOG_LEVEL`
+- `MCP_FUZZER_SAFETY_ENABLED`
+- `MCP_FUZZER_FS_ROOT`
+- `MCP_FUZZER_HTTP_TIMEOUT`
+- `MCP_FUZZER_SSE_TIMEOUT`
+- `MCP_FUZZER_STDIO_TIMEOUT`
+- `MCP_FUZZER_ICON_THEME` (ascii | unicode | emoji; defaults to ascii)
+- `MCP_SPEC_SCHEMA_VERSION` (e.g., 2025-11-25)
+
+## Migration From Pre-Redesign Configs (<=3d61ee4)
+
+The configuration schema is now flat. Ensure these keys are at the top level:
+`mode`, `protocol`, `endpoint`, `runs`, `phase`, `output`, `protocol_type`,
+`spec_guard`, `spec_resource_uri`, `spec_prompt_name`, and `spec_prompt_args`.
+The legacy `output_dir` key is still accepted but deprecated; prefer
+`output.directory`.
+
+Legacy (pre-redesign) configs:
+
+```yaml
+# output_dir (legacy)
+output_dir: "reports"
+```
+
+Current configs:
+
+```yaml
+mode: "tools"
+protocol: "http"
+endpoint: "http://localhost:8000"
+runs: 10
+phase: "aggressive"
+protocol_type: "InitializeRequest"
+spec_guard: true
+spec_resource_uri: "file:///tmp/resource.txt"
+spec_prompt_name: "example_prompt"
+spec_prompt_args: '{"query":"probe"}'
+output:
+  directory: "reports"
+```
+
+Authentication-related environment variables are documented in the getting-started guide and are used when `--auth-env` is set.
+
+## Export Formats
+
+The CLI can export standardized reports via:
+
+- `--export-csv` (CSV)
+- `--export-xml` (XML)
+- `--export-html` (HTML)
+- `--export-markdown` (Markdown)
+
+These flags can also be placed directly in config files under their flag names,
+for example:
+
+```yaml
+export_csv: "reports/results.csv"
+export_html: "reports/results.html"
+```
+
+Standardized output files are currently emitted as JSON regardless of
+`output.format`; other values are reserved for future formats. Only
+`fuzzing_results`, `safety_summary`, and `error_report` are emitted today;
+`performance_metrics` and `configuration_dump` are reserved.
+
+## Authentication Configuration
+
+Authentication can be configured in two ways:
+
+- `--auth-config`: Path to a JSON file defining providers and tool mappings.
+- `--auth-env`: Read authentication settings from environment variables.
+
+Example `--auth-config` JSON:
+
+```json
+{
+  "providers": {
+    "api_key_provider": {
+      "type": "api_key",
+      "api_key": "secret123",
+      "header_name": "Authorization"
+    },
+    "machine_provider": {
+      "type": "oauth_client_credentials",
+      "token_url": "https://auth.example.com/oauth/token",
+      "client_id": "mcp-fuzzer",
+      "client_secret": "secret123",
+      "scope": "tools.read"
+    }
+  },
+  "tool_mapping": {
+    "example_tool": "api_key_provider",
+    "machine_tool": "machine_provider"
+  }
+}
+```
+
+When `--auth-env` is used, set the appropriate variables (such as
+`MCP_API_KEY`, `MCP_HEADER_NAME`, `MCP_USERNAME`, `MCP_PASSWORD`,
+`MCP_OAUTH_TOKEN_URL`, `MCP_OAUTH_CLIENT_ID`, and
+`MCP_OAUTH_CLIENT_SECRET`) before running the fuzzer. Set optional
+`MCP_OAUTH_SCOPE` when the token endpoint requires a client-credentials scope.
+OAuth client credentials auth uses HTTP Basic client authentication against the
+configured token endpoint and sends the resulting bearer token as an
+`Authorization` header.
+
+## Custom Transports
+
+Custom transports can be registered via configuration using the `custom_transports` section:
+
+```yaml
+custom_transports:
+  mytransport:
+    module: "my_package.my_transport"
+    class: "MyTransport"
+    description: "My custom transport"
+```
+
+Use the transport by setting `protocol: mytransport` in the same config file.
+
+## Notes
