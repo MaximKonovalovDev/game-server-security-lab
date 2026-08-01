@@ -1,0 +1,19 @@
+[*] fake Flax server listening on UDP 127.0.0.1:7777 (tick=0.5s)
+[63034] CONNECT connect_id=0x58b20ca7
+[*] fake Flax server listening on UDP 127.0.0.1:7777 (tick=0.5s)
+[54368] CONNECT connect_id=0x51e41978
+[54369] CONNECT connect_id=0x78591afa
+[54369] ConnectionRequest username='orchestrator' token_len=0
+[54369] Chat #1 len=120 has_sender=1
+[54369] Chat #2 len=120 has_sender=1
+[54369] Chat #3 len=120 has_sender=1
+[54369] Chat #4 len=120 has_sender=1
+[54369] Chat #5 len=120 has_sender=1
+[54369] Chat #6 len=120 has_sender=1
+[54369] Chat #7 len=120 has_sender=1
+[54369] Chat #8 len=120 has_sender=1
+[54369] Chat #9 len=120 has_sender=1
+[54369] Chat #10 len=120 has_sender=1
+[54369] Chat #11 len=120 has_sender=1
+[54369] Chat #12 len=120 has_sender=1
+[54369] disconnect (peer 1)

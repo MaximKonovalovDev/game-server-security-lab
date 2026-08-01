@@ -1,0 +1,3 @@
+[*] flax_enet lab client -> 127.0.0.1:7777 mode=chat-flood
+[>] 12 chat messages in 0.03s
+[<-] chat echoes received back: 1

@@ -1,0 +1,6 @@
+[*] flax_enet lab client -> 127.0.0.1:7777 mode=craft
+[+] connected. client id=1 session=1
+[+] ConnectionRequest sent (username='LabTester', token=0B)
+[<-] game packet ConnectionResponse: {'state': 'Accepted', 'id': '47df4411-cda2-476c-8e4d-e21142b5775a'}
+[<-] game packet PlayerList: {'count': 1, 'players': ['LabTester@47df4411'], 'truncated': False}
+[>] sending raw payload (3B): 01ffff

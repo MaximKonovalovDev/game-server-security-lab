@@ -1,0 +1,11 @@
+{
+  "timestamp": "2026-07-31T22:28:35.5952824+03:00",
+  "attack": "chat-flood",
+  "port": 7777,
+  "server": "C:\\Program Files\\Python313\\python.exe",
+  "server_pid": 11228,
+  "server_ready": true,
+  "attack_exit_code": 0,
+  "attack_output": "[*] flax_enet lab client -> 127.0.0.1:7777 mode=chat-flood\r\n[>] 12 chat messages in 0.03s\r\n[<-] chat echoes received back: 1\r\n",
+  "server_stdout_tail": ""
+}

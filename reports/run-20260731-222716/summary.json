@@ -1,0 +1,11 @@
+{
+  "timestamp": "2026-07-31T22:27:16.8317269+03:00",
+  "attack": "connect",
+  "port": 7777,
+  "server": "C:\\Program Files\\Python313\\python.exe",
+  "server_pid": 27320,
+  "server_ready": true,
+  "attack_exit_code": 2,
+  "attack_output": null,
+  "server_stdout_tail": ""
+}

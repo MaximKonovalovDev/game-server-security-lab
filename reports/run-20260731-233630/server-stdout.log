@@ -1,0 +1,104 @@
+[*] fake Flax server listening on UDP 127.0.0.1:7777 (tick=0.5s)
+[62788] CONNECT connect_id=0x1cd5230e
+[62789] CONNECT connect_id=0x90b151ab
+[62789] handler error: 'username'
+[62789] handler error: 'message'
+[62789] PacketRegistry warning: unknown id 0x7 len=180
+[62789] handler error: 'username'
+[62789] handler error: 'message'
+[62789] PacketRegistry warning: unknown id 0x7 len=179
+[62789] handler error: 'username'
+[62789] Chat #3 len=5 has_sender=111
+[62789] PacketRegistry warning: unknown id 0x7 len=181
+[62789] handler error: 'charmap' codec can't encode character '\uc100' in position 42: character maps to <undefined>
+[62789] handler error: 'message'
+[62789] PacketRegistry warning: unknown id 0x7 len=24
+[62789] handler error: 'charmap' codec can't encode characters in position 39-43: character maps to <undefined>
+[62789] handler error: 'message'
+[62789] PacketRegistry warning: unknown id 0x7 len=182
+[62789] handler error: 'charmap' codec can't encode characters in position 38-42: character maps to <undefined>
+[62789] handler error: 'message'
+[62789] PacketRegistry warning: unknown id 0x7 len=182
+[62789] ConnectionRequest username='LabTestkr' token_len=0
+[62789] handler error: 'message'
+[62789] PacketRegistry warning: unknown id 0x7 len=18
+[62789] handler error: 'username'
+[62789] handler error: 'message'
+[62789] PacketRegistry warning: unknown id 0x7 len=184
+[62789] ConnectionRequest username='LabTester' token_len=0
+[62789] PacketRegistry warning: unknown id 0x84 len=15
+[62789] PacketRegistry warning: unknown id 0x7 len=180
+[62789] handler error: 'username'
+[62789] Chat #9 len=5 has_sender=0
+[62789] PacketRegistry warning: unknown id 0x7 len=179
+[62789] ConnectionRequest username='LabTes\x84er' token_len=1
+[62789] Chat #10 len=5 has_sender=0
+[62789] PacketRegistry warning: unknown id 0x7 len=182
+[62789] handler error: 'charmap' codec can't encode character '\u5872' in position 44: character maps to <undefined>
+[62789] handler error: 'message'
+[62789] PacketRegistry warning: unknown id 0x7 len=102
+[62789] handler error: 'charmap' codec can't encode character '\ufe4c' in position 36: character maps to <undefined>
+[62789] handler error: 'message'
+[62789] PacketRegistry warning: unknown id 0x7 len=36
+[62789] handler error: 'charmap' codec can't encode character '\u4061' in position 37: character maps to <undefined>
+[62789] handler error: 'message'
+[62789] PacketRegistry warning: unknown id 0x7 len=113
+[62789] PacketRegistry warning: unknown id 0x9 len=24
+[62789] PacketRegistry warning: unknown id 0x5 len=13
+[62789] PacketRegistry warning: unknown id 0x7 len=182
+[62789] handler error: 'charmap' codec can't encode characters in position 39-44: character maps to <undefined>
+[62789] Chat #14 len=5 has_sender=0
+[62789] PacketRegistry warning: unknown id 0x7 len=181
+[62789] handler error: 'username'
+[62789] Chat #15 len=5 has_sender=0
+[62789] PacketRegistry warning: unknown id 0x7 len=182
+[62789] handler error: 'username'
+[62789] handler error: 'message'
+[62789] PacketRegistry warning: unknown id 0x7 len=59
+[62789] handler error: 'charmap' codec can't encode character '\u4362' in position 38: character maps to <undefined>
+[62789] Chat #17 len=5 has_sender=33
+[62789] PacketRegistry warning: unknown id 0x7 len=181
+[62789] handler error: 'username'
+[62789] Chat #18 len=5 has_sender=31
+[62789] PacketRegistry warning: unknown id 0x7 len=181
+[62789] handler error: 'username'
+[62789] handler error: 'message'
+[62789] PacketRegistry warning: unknown id 0x7 len=130
+[62789] handler error: 'username'
+[62789] handler error: 'message'
+[62789] PacketRegistry warning: unknown id 0x7 len=180
+[62789] handler error: 'username'
+[62789] Chat #21 len=5 has_sender=170
+[62789] PacketRegistry warning: unknown id 0x7 len=179
+[62789] handler error: 'username'
+[62789] Chat #22 len=5 has_sender=0
+[62789] PacketRegistry warning: unknown id 0x7 len=151
+[62789] PacketRegistry warning: unknown id 0x4c len=26
+[62789] Chat #23 len=5 has_sender=0
+[62789] PacketRegistry warning: unknown id 0x7 len=182
+[62789] handler error: 'username'
+[62789] handler error: 'message'
+[62789] PacketRegistry warning: unknown id 0x7 len=181
+[62789] PacketRegistry warning: unknown id 0x9 len=23
+[62789] Chat #25 len=5 has_sender=0
+[62789] PacketRegistry warning: unknown id 0x7 len=122
+[62789] handler error: 'charmap' codec can't encode character '\ufffd' in position 38: character maps to <undefined>
+[62789] Chat #26 len=5 has_sender=122
+[62789] PacketRegistry warning: unknown id 0x7 len=180
+[62789] handler error: 'username'
+[62789] handler error: 'message'
+[62789] PacketRegistry warning: unknown id 0x7 len=182
+[62789] PacketRegistry warning: unknown id 0x4a len=27
+[62789] Chat #28 len=5 has_sender=0
+[62789] PacketRegistry warning: unknown id 0x7 len=179
+[62789] PacketRegistry warning: unknown id 0x28 len=26
+[62789] PacketRegistry warning: unknown id 0x53 len=18
+[62789] PacketRegistry warning: unknown id 0x7 len=180
+[62789] handler error: 'charmap' codec can't encode characters in position 41-44: character maps to <undefined>
+[62789] handler error: 'message'
+[62789] PacketRegistry warning: unknown id 0x7 len=181
+[62789] PacketRegistry warning: unknown id 0xcf len=24
+[62789] Chat #30 len=5 has_sender=0
+[62789] PacketRegistry warning: unknown id 0x7 len=181
+[62789] handler error: 'charmap' codec can't encode characters in position 39-44: character maps to <undefined>
+[62789] disconnect (peer 1)

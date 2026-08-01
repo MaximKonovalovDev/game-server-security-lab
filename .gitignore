@@ -1,0 +1,20 @@
+# .NET build artifacts (wire-probe)
+**/bin/
+**/obj/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Big staged downloads (re-downloadable)
+tools/installers/
+
+# Generated artifacts
+tools/boofuzz/fuzz-results.db*
+tools/boofuzz/fuzz-results.sqlite*
+*.pcap
+*.pcapng
+
+# Portwarp client (re-downloadable, see DEPLOY-TUNNEL.md)
+tools/portwarp/

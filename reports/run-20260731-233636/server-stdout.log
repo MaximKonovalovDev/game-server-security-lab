@@ -1,0 +1,6 @@
+[*] fake Flax server listening on UDP 127.0.0.1:7777 (tick=0.5s)
+[53436] CONNECT connect_id=0xc6e4a4ea
+[53437] CONNECT connect_id=0x68c0c1f2
+[53437] ConnectionRequest username='LabTester' token_len=0
+[53437] PacketRegistry warning: unknown id 0x7 len=5
+[53437] disconnect (peer 1)

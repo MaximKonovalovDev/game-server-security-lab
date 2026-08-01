@@ -1,0 +1,2 @@
+[*] flax_enet lab client -> 127.0.0.1:7777 mode=flood-request
+[>] 100 handshakes+requests in 6.20s (16.1/s)

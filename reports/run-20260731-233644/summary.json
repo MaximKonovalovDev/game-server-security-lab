@@ -1,0 +1,11 @@
+{
+  "timestamp": "2026-07-31T23:36:44.8789280+03:00",
+  "attack": "craft",
+  "port": 7777,
+  "server": "C:\\Program Files\\Python313\\python.exe",
+  "server_pid": 27192,
+  "server_ready": true,
+  "attack_exit_code": 0,
+  "attack_output": "[*] flax_enet lab client -> 127.0.0.1:7777 mode=craft\r\n[+] connected. client id=1 session=1\r\n[+] ConnectionRequest sent (username='LabTester', token=0B)\r\n[<-] game packet ConnectionResponse: {'state': 'Accepted', 'id': '47df4411-cda2-476c-8e4d-e21142b5775a'}\r\n[<-] game packet PlayerList: {'count': 1, 'players': ['LabTester@47df4411'], 'truncated': False}\r\n[>] sending raw payload (3B): 01ffff\r\n",
+  "server_stdout_tail": "[*] fake Flax server listening on UDP 127.0.0.1:7777 (tick=0.5s)\n[59249] CONNECT connect_id=0x89fd79a6\n[59250] CONNECT connect_id=0xe7c0965a\n[59250] ConnectionRequest username='LabTester' token_len=0\n[59250] handler error: 'username'\n[59250] disconnect (peer 1)"
+}

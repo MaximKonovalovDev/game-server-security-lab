@@ -1,0 +1,2 @@
+[*] flax_enet lab client -> 127.0.0.1:7777 mode=packet-soup
+[>] sent 100 random payloads in 0.00s

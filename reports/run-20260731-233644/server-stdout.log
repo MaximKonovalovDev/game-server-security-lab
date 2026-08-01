@@ -1,0 +1,6 @@
+[*] fake Flax server listening on UDP 127.0.0.1:7777 (tick=0.5s)
+[59249] CONNECT connect_id=0x89fd79a6
+[59250] CONNECT connect_id=0xe7c0965a
+[59250] ConnectionRequest username='LabTester' token_len=0
+[59250] handler error: 'username'
+[59250] disconnect (peer 1)
