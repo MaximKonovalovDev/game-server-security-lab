@@ -304,6 +304,7 @@ Full spec: `docs/SECURED-SERVER.md` — the one doc that fuses everything into O
 - **Ops loop:** T0 always-on → flags → shadow → waves; T1 on session end; nightly miner/retrain → receipts → model vN; abuse-report packager; human reviews flags, authorizes waves, nothing auto-bans.
 - **Build order:** P0 baseline fixes → P1 identity (envelope, fingerprints, ledger) → P2 sentinel shadow (FPR gate) → P3 public (Portwarp + quarantine + decoy) → P4 intel ops (miner, tool FP, abuse, honey rotation) → P5 MCP hardening.
 - **Acceptance:** all lab attacks detected, 0 clean flags, identity survives IP hop, quarantine quit-rate >> real, abuse package one-command, MCP endpoint fails all probes, zero attacker-reachable paths to DB/keys/model/tools.
+- **Scaling to 1000+ (shard fleet):** bandwidth is the wall, not CPU (transform broadcast O(players×visible)) → shards of 150-300 players (250/shard ≈ 53 Mbps, ~5k pps, one core). Fleet = gateway (login + shared identity/ban check before shard assignment) + N shards (full SECURED-SERVER stack each, internal-only ports) + quarantine/decoy shards + shared dossier DB/identity registry/model store (read-only vN, atomic swap); nightly retrain on all shards. Per-shard hardening unchanged; waves are fleet-wide; DDoS protection mandatory; cost ladder $0 lab → ~$25-45 single VPS → ~$100-150 for 1000+ → $250+ regional MMO; grow out by adding shards, never rewrite; scale acceptance: cross-shard identity, fleet wave, gateway flood drop, model rollback, shard-death reassignment.
 
 ---
 
