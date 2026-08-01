@@ -238,6 +238,95 @@ consistency, engagement-coincidence).
 
 ---
 
+## L7. Counter-offense playbook (legal — this is the "attack the hacker" section)
+
+**Line in the sand:** no malware, no worms, no payloads against the attacker's
+machine, no hack-back — CFAA-class felonies, we're not anonymous and they are,
+and a tool "hacker" is usually a kid with a free tool. Every play below is
+either inside **our own infrastructure** or **public data**. Ranked by effect.
+
+### 7.1 Shadow-ban lobby (the single best weapon)
+Flagged sessions are *not* banned — they're silently routed to a **quarantine
+server** populated only by other flagged players and bots.
+- They believe they're playing the real game (same MOTD, same version string,
+  plausible player counts). They keep their "wins", their tool keeps working.
+- They never touch a real player → their cheating has zero effect → the
+  payoff dies. Cheaters quit when there are no victims (RDO/Rust pattern,
+  RESEARCH-002; also why 178 humans joined KittyScan honeypots and kept
+  playing bots).
+- Every quarantine session is a permanent labeled specimen: full capture +
+  SENTINEL features + identity graph, forever.
+- Routing rule: quarantine verdict must be **delayed and batched** (never
+  route mid-session in response to an obvious trigger — that teaches them);
+  reassignment happens at reconnect, off-hours, in waves.
+- Ops detail: quarantine server = same binary, separate instance + separate
+  DB, `IS_QUARANTINE=1` env var; a `quarantine` auth flag in the session
+  ticket; metrics: sessions/day, quit-rate vs real server (goal: quit-rate
+  on quarantine >> real server).
+
+### 7.2 Make their tool worthless (the damage play)
+Server authority + strict parsing + HMAC envelope (SECURITY-BY-DESIGN) turn
+their purchase into a paperweight. When a tool stops working, users migrate
+away and the tool dies (case-study lesson: cheaters leave enforced servers,
+and games that failed to enforce died *because* of the ones who stayed).
+Every NET-* fix is an attack on their tool's market.
+
+### 7.3 Waste their time (honeypot hold)
+The decoy server (L1.1) exists to give fake success forever. Add the
+**slow-burn variant**: decoy responses *work* but slightly worsen over days
+("your teleport now has a 20% miss chance") — they burn hours tuning a tool
+against a server that doesn't exist. Cuckoo's Egg principle: the defender
+spends $0; the attacker spends days. Log everything while they do.
+
+### 7.4 Bait they grab themselves (the "leave it for him" version)
+Place honey-files on **our own surfaces** only — never planted on their
+machines, never sent to them:
+- **Fake admin config / "secret" paste** (GitHub gist, pastebin, our Discord):
+  contains a beacon token + plausible-looking connection info. When their
+  tool or they fetch it → callback with IP + token + user-agent → linkage
+  edge (same-operator proof across accounts).
+- **Canary Discord invite in the MOTD** → join → handle + join-time link
+  (KittyScan pattern).
+- **Honey protocol docs**: publish a "leaked" WIRE-FORMAT with wrong
+  opcode/field offsets (rotated per version). A tool built against it will
+  misbehave identifiably → protocol-DNA cluster + instant tool-version
+  fingerprint. (Deliberate misinformation, our own docs — legal, and the
+  best poison for reimplementation tools, which we know they build — AoS
+  lesson: published docs = the cheat's sourcebook.)
+- The fake-cracked-tool-download trap stays **optional + legal review** only
+  (it approaches active deception of third parties; the passive variants
+  above deliver 90% of the value without the risk).
+
+### 7.5 Destroy their infrastructure (abuse reports)
+One good report beats any worm:
+- **Discord** — cheat-discord/shared-invite links with evidence → server
+  nuked, handles linked to our records.
+- **Flood/VPN host** — volumetric DDoS evidence (PCAP + timestamps + packet
+  rates from Flowtriq-style agent) → provider disconnects their account.
+- **Tunnel/hosting provider** (Portwarp-class) — ToS abuse: their tunnel
+  used for DDoS → revoked (we host on the same providers; reports land fast).
+- **Tool distribution** — cheat repo/DMCA/ToS takedown on the tool channel.
+- Template: `reports/abuse-template.md` — facts only: IP(s), timestamps,
+  packet counts, evidence PCAP hash, which rule was broken. No opinion, no
+  demands — providers act on evidence.
+
+### 7.6 Poison their AI (the cognitive play)
+L5.3 decoys (fake teleport confirmations, decoy item positions, honey world
+text) make their CV/LLM tool *learn wrong things about the game*. Their AI
+"believes" teleport works → keeps trying → stays flagged. Doubles as their
+reverse-prompt (we read their reactions) and their doom (behavioral tells
+feed SENTINEL v2).
+
+### 7.7 The endgame (ban waves)
+When a cheater cluster's value is exhausted (data mined, labeled, tool
+identified), kill the whole cluster at once: **simultaneous account ban +
+fingerprint burn + quarantine rotate**, delivered in one wave (4-6 h
+new-variant window applies to *us* too — after a wave, their rebuilt tool is
+identifiable in under a day by protocol DNA). Wave = the only message they
+understand; singles teach them.
+
+---
+
 ## Test matrix (lab acceptance)
 
 | Capability | Lab proof |
@@ -249,6 +338,10 @@ consistency, engagement-coincidence).
 | Identity graph | one lab "attacker" (3 accounts, 2 IPs, 1 machine) resolves to one cluster |
 | Pattern miner | captured fuzz attack → auto-replayed → new signature + SENTINEL label |
 | AI bait | decoy text present/absent changes a scripted CV-bot's behavior (lab bot, not a real cheater) |
+| Shadow lobby | lab "attacker" session routed to quarantine at reconnect; quarantine players never co-locate with clean players (2 clean + 1 flagged concurrent test) |
+| Quarantine drift | quarantine quit-rate tracked and reported per wave (goal: >> real server) |
+| Honey protocol docs | tool built against published decoy offsets misbehaves identifiably → new DNA cluster |
+| Abuse report | lab flood produces a complete evidence package (IP, timestamps, PCAP hash) in one command |
 
 ---
 
