@@ -121,6 +121,57 @@ BEFORE transforms ship.
 
 ---
 
+## PART D — GITHUB "STEAL OR MOVE TO" SWEEP (verified 2026-08-01)
+
+Round 3 of research: stop reinventing wheels — find existing repos to steal
+patterns from or move to. 6 web searches + 4 GitHub API queries
+(`q=enet`, `flax+engine+networking`, `game+anti+cheat+testing`, `memory+hacking+python`)
++ curated review. Top-of-list data: stars/forks/license/activity at search time.
+
+### D1. ENet wire-format ground truth & reference clients
+| Repo | What it is | Verdict |
+|---|---|---|
+| **lsalzman/enet** | Canonical ENet C library (3,245★, MIT, active Jun 2026) | [use] wire-format ground truth — re-verify WIRE-FORMAT.md + boofuzz defs against its source |
+| **zpl-c/enet** | Maintained C fork (1,071★, MIT, Jun 2026) | [use] same; modern API |
+| **nxrighthere/ENet-CSharp** | C# ENet binding (906★, MIT, Jul 2025) | [use] rogue-client codec reference — same language as the game |
+| **zpl-c/librg** | World-sync library on ENet (1,485★, BSD-3, Jan 2026) | [study] how they chunk/organize packets over ENet |
+| **xtreme8000/BetterSpades** | Ace of Spades client on ENet (281★, GPL-3.0) | [study] real-world ENet client: handshake, channel use, reliability |
+| **kbirk/enet-example** | Minimal C++ ENet client+server pair (44 commits) | [study] smallest working send/receive pair |
+| **nsetzer/mpgameserver** | Python UDP game server, security-focused (61★, LGPL-2.1) | [study] rate-limit/validation patterns for the fake-server work |
+
+### D2. Flax & game frameworks
+| Repo | What it is | Verdict |
+|---|---|---|
+| **FlaxEngine/NetworkSample** | Official sample: players lobby + chat on Flax networking (25★, MIT, Jul 2021) | [use] vanilla-Flax baseline — design NET-3 validators to fit official patterns |
+| **NazaraEngine** | C++ game framework w/ networking (837★, MIT, Jul 2026) | [study] transport design |
+| **Tornamic/CoopAndreas** | GTA:SA co-op mod on ENet (565★, GPL-3.0, active Jul 2026) | [study] mature ENet usage in a real game |
+
+### D3. Wireshark dissector
+| Repo | What it is | Verdict |
+|---|---|---|
+| **cgutman/wireshark-enet-dissector** | Pre-existing ENet Wireshark dissector | [use] **diff vs our `flax_enet.lua`** — absorb its ENet-core command coverage instead of rewriting |
+
+### D4. Reversing & attack-side knowledge (Phase 2 VM)
+| Repo | What it is | Verdict |
+|---|---|---|
+| **dnSpyEx/dnSpy** | Maintained revival of dnSpy (10,712★, GPL-3.0) | [use] already selected — TOOLCHAIN status table, VM only |
+| **ridpath/gamehacking-cheatsheet** | Memory analysis, AC evasion, engine reversing (79★, MIT, Jan 2026) | [use] already in TOOLCHAIN Layer 4 — expand from it |
+| **ethanedits/Apex-Legends-SDK** | Apex cheat SDK (156★, NO LICENSE, 2022) | skip — no license, EAC-specific, unrelated engine |
+| **cybryk/kernelmodeinjector** | Kernel-mode DLL injector (47★, NO LICENSE) | skip — out of scope, no license |
+
+### D5. Gaps confirmed — still our original work
+- **No ENet-specific protocol fuzzers / packet-crafting libraries exist** → `fuzz_enet.py` + `flax_enet.py` stay ours.
+- No Flax-specific security research repos at all.
+
+### Recommended adoptions (proposed, confirm before vendoring)
+1. `[use]` ENet-CSharp as rogue-client codec reference (C#, matches game).
+2. `[use]` lsalzman/enet source → re-verify WIRE-FORMAT.md + fuzz defs.
+3. `[use]` cgutman dissector → diff vs `flax_enet.lua`, absorb ENet-core coverage.
+4. `[study]` BetterSpades + mpgameserver for new attack scenarios (NET-3 flood shapes).
+5. `[study]` NetworkSample for NET-3 server-authoritative patterns.
+
+---
+
 ## Immediate next actions (in order)
 1. `[use]` Wire the server + fix NET-1/NET-2/NET-4 (game code).
 2. `[use]` Write the Wireshark Lua dissector for PacketIds 1-8 + combat 200 (keeps in `tools/`).
@@ -128,3 +179,6 @@ BEFORE transforms ship.
 4. `[study]` Read oomph's movement checks → design your NET-3 validation rules.
 5. `[use]` boofuzz + radamsa harnesses against the running server.
 6. `[use]` OWASP GSF + awesome-game-security as the ongoing reference index.
+7. `[use]` Diff cgutman/wireshark-enet-dissector vs `flax_enet.lua` — absorb ENet-core command coverage.
+8. `[use]` Cross-check WIRE-FORMAT.md + boofuzz defs against lsalzman/enet source.
+9. `[use]` Build rogue-client codec on ENet-CSharp patterns.

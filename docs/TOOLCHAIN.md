@@ -18,6 +18,7 @@ What the server actually sends/receives. Required before any attack makes sense.
 | **Termshark** | [book] | TUI for tshark — quick captures without the GUI. |
 | **Npcap** (Wireshark driver) | [book] | Loopback capture on Windows requires Npcap with loopback support enabled. |
 | **Zeek / netsniff-ng** | [book] | Later: long-running traffic logging on a dedicated test host. Optional. |
+| **wireshark-enet-dissector** (cgutman) | [git] | Pre-existing ENet dissector — diff against our `flax_enet.lua` and absorb its ENet-core command coverage (verified Aug 2026). |
 | Game log + MCP bridge health | your repo | Your server already has the FlaxMcp HTTP bridge + log files — the orchestrator uses these to detect crashes (simpler than Wireshark for "is it alive"). |
 
 ## Layer 2 — ATTACK (crafting & injection)
@@ -31,6 +32,8 @@ The realistic hacker = modified client, not raw sockets. Order matters:
 | **netcat (ncat) / socat** | [book] | Raw UDP one-liners: `echo garbage \| ncat -u 127.0.0.1 7777`. Tests how the server handles non-protocol bytes. |
 | **Scapy** | [book] | Python packet crafting — useful for L3/L4-level tests (UDP floods, fragmentation, source-spoofing on LAN). Flax's app-layer framing is engine-internal, so Scapy stays at transport level. |
 | **boofuzz** | [git] | Network protocol fuzzing framework (successor of Sulley). Define your packet structures (packet ID + fields) once, and it systematically mutates every field, including length fields — exactly what finds your unbounded-count bugs. |
+| **ENet-CSharp** (nxrighthere) | [git] | C# ENet binding (MIT) — reference codec for the rogue client, same language as the game (verified Aug 2026). |
+| **mpgameserver** (nsetzer) | [git] | Python UDP game server, security-focused (LGPL-2.1) — rate-limit/validation patterns for the fake-server + NET-3 flood shapes (verified Aug 2026). |
 | **radamsa** | [git] | Mutation fuzzer: take a captured real packet (PCAP from Layer 1) and generate thousands of mutated variants. |
 | **hping3** | [book] | Custom-crafted TCP/UDP packets and floods at IP level. |
 | **nmap / masscan** | [book] | Verify the server's exposed surface: which ports answer, what else is listening on the test machine. |
