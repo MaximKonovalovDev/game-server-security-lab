@@ -1,0 +1,85 @@
+{
+  "target": "https://example.com",
+  "findings": [
+    {
+      "check": "header-strict-transport-security",
+      "severity": "high",
+      "evidence": "header absent",
+      "expected": "present",
+      "actual": "absent",
+      "fix": "HSTS missing - enables SSL-stripping. Fix: `Strict-Transport-Security: max-age=31536000; includeSubDomains`"
+    },
+    {
+      "check": "header-content-security-policy",
+      "severity": "med",
+      "evidence": "header absent",
+      "expected": "present",
+      "actual": "absent",
+      "fix": "CSP missing - XSS impact grows. Fix: add a CSP header (start strict, relax as needed)"
+    },
+    {
+      "check": "header-x-frame-options",
+      "severity": "med",
+      "evidence": "header absent",
+      "expected": "present",
+      "actual": "absent",
+      "fix": "Clickjacking risk. Fix: `X-Frame-Options: DENY` (or CSP frame-ancestors)"
+    },
+    {
+      "check": "server-banner",
+      "severity": "low",
+      "evidence": "cloudflare",
+      "expected": "no version-disclosing banner",
+      "actual": "cloudflare",
+      "fix": "hide version: `ServerTokens Prod` / remove header via proxy"
+    },
+    {
+      "check": "header-x-content-type-options",
+      "severity": "low",
+      "evidence": "header absent",
+      "expected": "present",
+      "actual": "absent",
+      "fix": "MIME sniffing risk. Fix: `X-Content-Type-Options: nosniff`"
+    },
+    {
+      "check": "header-referrer-policy",
+      "severity": "low",
+      "evidence": "header absent",
+      "expected": "present",
+      "actual": "absent",
+      "fix": "Referrer leaks URLs. Fix: `Referrer-Policy: strict-origin-when-cross-origin`"
+    },
+    {
+      "check": "http-status",
+      "severity": "info",
+      "evidence": "GET / -> 200",
+      "expected": "any",
+      "actual": "200",
+      "fix": "-"
+    },
+    {
+      "check": "header-permissions-policy",
+      "severity": "info",
+      "evidence": "header absent",
+      "expected": "present",
+      "actual": "absent",
+      "fix": "No Permissions-Policy - browser features unrestricted"
+    },
+    {
+      "check": "tls-version",
+      "severity": "info",
+      "evidence": "TLSv1.3",
+      "expected": "TLS1.2+",
+      "actual": "TLSv1.3",
+      "fix": "disable TLS1.0/1.1 if shown"
+    },
+    {
+      "check": "ports-open",
+      "severity": "info",
+      "evidence": "open: [80, 8080, 8443]",
+      "expected": "-",
+      "actual": "80,8080,8443",
+      "fix": "close unused; expose only required ports"
+    }
+  ]
+}
